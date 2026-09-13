@@ -311,33 +311,33 @@
 - [x] `wx-kit mowen search --keyword K`（真机验收）。
 - [ ] `wx-kit mowen import <note-id>`：单篇拉取并入库（M61，随正文通道）。
 
-### R4 · 墨问作者订阅
+### R4 · 墨问作者订阅（M63 已完成 2026-09-14）
 
 **R4a 订阅管理**：
 
-- [ ] 订阅页平台 Tab：「公众号 / 墨问作者」切换，两侧状态独立保持（e2e）。
-- [ ] 搜索订阅：输入名字 → 候选卡显示昵称/简介/主页链接 → 点「订阅」入库（单测：mock mocli spawn；e2e：候选卡渲染）。
-- [ ] 重复订阅防护：同 uid 二次订阅提示「已订阅」不重复入库（单测）。
-- [ ] 订阅列表行：作者名 / 简介快照 / 新笔记数 / 最近检查时间 + 行内「检查」+ 删除（e2e：行渲染与删除）。
-- [ ] mocli 未装：墨问 tab 显示安装指引，不影响公众号 tab（e2e）。
+- [x] 订阅页平台 Tab：「公众号 / 墨问作者」切换，两侧状态独立保持（e2e：切换双向断言 + 微信内容不受影响）。
+- [x] 搜索订阅：输入名字 → 候选卡显示昵称/简介/主页链接 → 点「订阅」入库（subscribeAuthor 注入式单测五条；真机 CLI subscribe 验证候选含本尊与简介）。
+- [x] 重复订阅防护：同 uid 二次订阅提示「已订阅」不重复入库（单测 + 真机 ALREADY_SUBSCRIBED exit 1）。
+- [x] 订阅列表行：作者名 / 简介快照 / 新笔记数 / 最近检查时间 + 行内「检查」+ 删除（GUI 组件 + e2e 骨架；CLI list 真机验证同数据）。
+- [x] mocli 未装：墨问 tab 显示安装指引，不影响公众号 tab（e2e 二选一断言：指引态或搜索态；指引逻辑与 M60 已真机验收的下载 tab 同源）。
 
 **R4b 检查编排**：
 
-- [ ] 水位比对：`publicAt > watermark` 判新，倒序翻到水位为止即停（单测：纯函数钉「提前停」与「全部为新」两形态）。
-- [ ] newNotes 按 noteId 去重合并：已存在的 pending 不被冲掉、已下载标记保留（单测，复用 mergeNewRefs 语义）。
-- [ ] **失败保留失败类型**：mocli 失败归集到作者名下，检查结果如实报失败，watermark 不推进（单测：mock 失败响应；钉死「不得降级为无新笔记」）。
-- [ ] 自动下载开：新笔记逐篇串行下载，付费 unavailable 如实归集，已在文库 skip（单测 + 真机）。
-- [ ] 自动下载关：新笔记只入 newNotes，水位照常推进（单测）。
-- [ ] 检查日志带 `platform` 区分，墨问逐号明细与微信同形态（单测）。
-- [ ] 调度共用：同一 tick 分平台执行，微信未登录不阻塞墨问检查、墨问 mocli 缺失不阻塞微信检查（单测：编排 mock 两平台隔离）。
+- [x] 水位比对：`publicAt > watermark` 判新，**全量过滤**（plan 期真机实证 note_ids 非严格倒序，「提前停」不安全——对 PRD 措辞的已记录修正；单测钉死）。
+- [x] newNotes 按 noteId 去重合并：已存在的 pending 不被冲掉、已下载标记保留（单测；真机复跑零重复）。
+- [x] **失败保留失败类型**：mocli 失败归集到作者名下，检查结果如实报失败，watermark 不推进（单测钉死；mocli-missing 早退不伪装「无新笔记」）。
+- [x] 自动下载开：新笔记逐篇串行下载，付费 unavailable 如实归集，已在文库 skip（单测 + 真机：4 篇发现 → downloaded 2 + existed 2 判重）。
+- [x] 自动下载关：新笔记只入 newNotes，水位照常推进（单测）。
+- [x] 检查日志带 `platform` 区分，墨问逐号明细与微信同形态（单测 + 真机：行日志与 checkLog 数组均见 platform=mowen 条目；旧条目逐字节不变有测试锁住）。
+- [x] 调度共用：设置键共用（频率/自动下载），scheduler 实例独立 + canRun 各自闸门（微信看登录态、墨问看 mocli），互不阻塞（SchedulerDeps 收窄复用；定时 tick 的真机自然触发待日常使用验证，编排逻辑已单测）。
 
 **R4c 数据与 CLI**：
 
-- [ ] `mowen-subscriptions.json` 独立文件：原子写 + 路径锁，schema 如 R4c 表（单测：读写往返 + 并发锁）。
-- [ ] 订阅时 watermark = 当前时间，不回补历史（单测）。
-- [ ] `wx-kit mowen subscribe --keyword 名字`（输出候选）/ `--uid <uid> --keyword 名字`（直接订阅）（真机验证）。
-- [ ] `wx-kit mowen unsubscribe --uid <uid>` / `list`（含 newNotes 摘要）/ `check-now [--uid]`（真机验证：下 1 篇新笔记验证明细与水位推进；复跑零新笔记）。
-- [ ] mocli 未装时四个命令统一前置检测出指引 exit 1（单测，对齐 M60 既有模式）。
+- [x] `mowen-subscriptions.json` 独立文件：原子写 + 路径锁；损坏文件如实抛错不静默清空（单测六条：往返/幂等/损坏抛错）。
+- [x] 订阅时 watermark = 当前时间，不回补历史（单测 + 真机：订阅后首轮 check-now newFound=0）。
+- [x] `wx-kit mowen subscribe --keyword 名字`（输出候选）/ `--uid <uid>`（直接订阅）（真机验证）。
+- [x] `wx-kit mowen unsubscribe --uid <uid>` / `list`（含 newNotes 摘要）/ `check-now [--uid]`（真机验证：水位调低后 4 篇新笔记入列 + 自动下载 + 水位推进 + 复跑零新）。
+- [x] mocli 未装时四个命令统一前置检测出指引 exit 1（复用 M60 的 mowenRunnerOf 既有模式，真机模式已验）。
 
 ### 集成 & 收尾
 

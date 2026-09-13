@@ -104,6 +104,38 @@ wx-kit subscription digest --date today --download [--accounts a,b] [--formats m
   "note": "微信读书接口每次仅返回最新一篇，历史文章无法增量回补" }
 ```
 
+## mowen — 墨问笔记（下载 + 作者订阅）
+
+前置：需要安装 mocli（`npm install -g @mowenxd/cli` 并 `mocli auth init`）。未安装时所有 `mowen` 命令返回 `MOCLI_NOT_FOUND` + 安装指引（退出码 1）。
+
+```sh
+wx-kit mowen detect                              # 检测 mocli 安装/版本/认证身份(moUid)
+wx-kit mowen search-user --keyword <名字>         # 模糊搜用户(昵称+简介)，返回 uid/name/intro/homeUrl
+wx-kit mowen list-user --uid <uid> [--filter all|album|fee|popular] [--recent 1h|24h|3d|7d|15d] [--count 20]
+wx-kit mowen list-mine [--filter priv|fee|pub|cond-pub] [--count 20]   # 自己的笔记(含私密)
+wx-kit mowen search --keyword <关键词> [--count 20]                     # 全站搜笔记
+wx-kit mowen import <note-id|URL>... [--expand-refs] [--formats 跟设置] # 单篇/多篇下载入库
+wx-kit mowen import --uid <uid> [--count 20] [--expand-refs]           # 按用户批量下载
+wx-kit mowen subscribe --keyword <名字>           # 只搜索：返回候选(uid/name/intro)，供用户确认
+wx-kit mowen subscribe --keyword <名字> --uid <uid> # 确认订阅(不回补历史，水位=订阅时刻)
+wx-kit mowen unsubscribe --uid <uid>
+wx-kit mowen list                                 # 订阅列表(各作者 newCount/newNotes 摘要)
+wx-kit mowen check-now [--uid <uid>]              # 立即检查订阅更新；是否自动下载由设置决定
+```
+
+- `import`：已删除/付费笔记如实失败（付费墙在服务端，不可绕过）；合集引用默认只渲染引用块，`--expand-refs` 才递归下载子笔记（深度 3，付费子笔记如实 unavailable）；图片自动本地化（OSS 签名 URL 有时效，同次流程下完）。
+- `subscribe`：两步式——先不带 `--uid` 输出候选给用户确认（防同名误订阅），确认后带 `--uid` 入库；重复订阅返回 `ALREADY_SUBSCRIBED`（退出码 1）。
+- `check-now`：水位比对（`publicAt > watermark` 判新），返回逐作者 `results[]`（`newFound`/`downloaded`/`existed`/`unavailable`）；mocli 失败归集到作者名下如实报 `failed`，**不代表没有新笔记**；检查日志与公众号订阅共用（`platform: 'mowen'` 区分）。
+- `list`：`newNotes[]` 每条含 `status`（`pending` 待处理 / `downloaded` / `ignored`）；`newCount` 是 pending 数。
+
+结果示意（`check-now`，自动下载策略下）：
+
+```json
+{ "ok": true, "authors": 1, "newFound": 4, "failed": 0,
+  "results": [ { "uid": "...", "name": "池建强", "ok": true, "newFound": 4,
+                 "downloaded": 2, "existed": 2, "unavailable": 0 } ] }
+```
+
 ## auth-status — 登录态
 
 ```sh
