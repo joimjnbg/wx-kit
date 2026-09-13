@@ -46,7 +46,9 @@ export interface CheckLogEntry {
   newFound: number                   // 发现的新文章总数
   failed: number                     // 失败的号数
   failures?: CheckFailure[]          // 逐号失败明细（v0.5.4 起;旧条目无此字段）
-  note?: string                      // 特殊情形：'no-session' | 'auth-expired' | 'no-accounts'
+  note?: string                      // 特殊情形：'no-session' | 'auth-expired' | 'no-accounts'（M63 墨问另有 'mocli-missing' | 'no-authors'）
+  /** M63：检查来源平台。缺省 'wechat'（旧条目兼容）——墨问检查与微信共用日志通道。 */
+  platform?: 'wechat' | 'mowen'
   /** M56：'check'=检查（可含自动下载交付）；'download'=纯交付（手动批量补下载）。缺省 'check'=旧数据兼容。 */
   kind?: 'check' | 'download'
   downloaded?: number                // 刚下载篇数（不含 exists——不把「文库已有」伪装成「刚下载」）
@@ -59,6 +61,7 @@ export function formatCheckLogLine(e: CheckLogEntry): string {
   const label = e.kind === 'download' ? 'DOWNLOAD' : e.trigger === 'auto' ? 'AUTO' : 'MANUAL'
   let line = `[${new Date(e.time).toISOString()}] ${label} accounts=${e.accounts} new=${e.newFound} failed=${e.failed}`
   if (e.note) line += ` note=${e.note}`
+  if (e.platform === 'mowen') line += ' platform=mowen'
   if (e.failures?.length) line += ` [${e.failures.map((f) => `${f.nickname}: ${f.error}`).join('; ')}]`
   if (e.downloaded !== undefined) line += ` downloaded=${e.downloaded}`
   if (e.existed !== undefined) line += ` existed=${e.existed}`
