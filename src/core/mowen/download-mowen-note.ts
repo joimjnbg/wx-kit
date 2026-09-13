@@ -13,6 +13,7 @@ import { fetchNoteShow, type NoteShowResult, type NoteShowDeps } from './note-sh
 import { MowenNoteUnavailable } from './errors'
 import { noteShowToParsedArticle } from './mowen-to-article'
 import { articleDirName, dedupeDirName, sanitizeName } from '../paths'
+import { exportArticle } from '../exporter'
 
 const REF_DEPTH_LIMIT = 3
 
@@ -58,7 +59,9 @@ export async function downloadMowenNote(
   const dir = join(accountDir, dirName)
 
   deps.onProgress?.({ phase: 'export', message: '生成文件' })
-  const meta = await exportParsed({ parsed, id, sourceUrl: url, dir, formats }, deps)
+  // exportArticle 只需要 ExportDeps（fetchBinary/BrowserWindow/now），微信的 fetchHtml 不要求
+  // 进来——由 MowenDownloadDeps 的 Omit 在类型层保证（静态导入无环：exporter 不回导 mowen）。
+  const meta = await exportArticle({ parsed, id, sourceUrl: url, dir, formats }, deps)
   await deps.library.add(meta)
 
   // —— 合集递归（显式开关）：子笔记走同一条下载路径，判重/限速/unavailable 天然复用 ——
@@ -100,13 +103,6 @@ export async function downloadMowenNote(
 
 // —— 内部：exportArticle 只需要 ExportDeps（fetchBinary/BrowserWindow/now），别把微信的
 // fetchHtml 一并要求进来——mowen 分支根本不用它（Omit 掉后调用方也省一组依赖）——
-async function exportParsed(
-  input: { parsed: import('../types').ParsedArticle; id: string; sourceUrl: string; dir: string; formats: DownloadFormat[] },
-  deps: MowenDownloadDeps,
-) {
-  const { exportArticle } = await import('../exporter')
-  return exportArticle(input, deps)
-}
 
 /** note/show 的真实网络通道。Node 内建 fetch；不挂 mp gateway（独立平台，保护闸语义不适用）。 */
 export const defaultFetchJson: NoteShowDeps['fetchJson'] = async (url, init) => {

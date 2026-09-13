@@ -12,6 +12,7 @@ import { parsePublicationTime } from './publication-time'
 import { globalRequestStopCode } from './mp-errors'
 import { normalizeAccountId } from './weread/book-id'
 import { extractMowenNoteId } from './mowen/url'
+import { downloadMowenNote } from './mowen/download-mowen-note'
 
 export interface DownloadArticleDeps extends ExportDeps {
   fetchHtml: (url: string) => Promise<string>
@@ -51,7 +52,6 @@ export async function downloadArticle(
 ): Promise<DownloadItemResult> {
   // —— M61:墨问笔记路由（在一切微信逻辑之前;两平台主键/解析/判重互不相干）——
   if (extractMowenNoteId(url)) {
-    const { downloadMowenNote } = await import('./mowen/download-mowen-note')
     return downloadMowenNote(url, formats, deps)
   }
 
