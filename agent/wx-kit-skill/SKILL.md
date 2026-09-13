@@ -50,6 +50,8 @@ Homebrew 安装后，实际二进制位于 `/Applications/wx-kit.app/Contents/Ma
 | 查订阅状态与最近检查记录 | `wx-kit subscription list`（`recentLog[]` 为最近 5 条检查记录，含自动下载明细；查自动下载历史用它，不用 check-now） |
 | 查询文库中某天发表的订阅文章 | `wx-kit subscription digest --date <日期>`（默认零网络，包括 today） |
 | 刷新下载后查询今天的文库日报 | `wx-kit subscription digest --date today --download`（仅今天允许） |
+| 下载墨问笔记（单篇/按用户批量） | `wx-kit mowen import <note-id|URL>` / `wx-kit mowen import --uid <uid>`（需 mocli） |
+| 订阅墨问作者并检查更新 | `wx-kit mowen subscribe --keyword <名字>`（先看候选）→ 带 `--uid` 确认；`wx-kit mowen check-now` 检查更新 |
 | 跨机器同步凭据 | `wx-kit session export -o ./creds.json` / `wx-kit session import ./creds.json` |
 | 查看文库 | `wx-kit library list` |
 | 搜索文库 | `wx-kit library search <关键词> [--account <公众号>]` |
