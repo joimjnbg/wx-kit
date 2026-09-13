@@ -411,6 +411,15 @@ async function main() {
     assert(inlineSum.includes('待下载') && inlineSum.includes('发现'),
       `行内「检查」只影响本行并落结果，摘要显示待下载 (saw: ${inlineSum.slice(0, 40)})`)
 
+    // ============ M63 · 订阅页平台 tab：墨问作者 ============
+    // e2e 隔离环境 mocli 可达与否不定——指引态或搜索态二选一，不允许空白页
+    await win.locator('.ant-segmented-item:has-text("墨问")').click()
+    await win.waitForSelector('[data-testid="mowen-subs-guide"], [data-testid="mowen-subs-kw"]', { timeout: 5000 })
+    assert(true, 'M63: 墨问订阅面板渲染（指引态或搜索态）')
+    await win.locator('.ant-segmented-item:has-text("公众号")').click()
+    await win.waitForSelector('[data-testid="subs-search-input"]', { timeout: 5000 })
+    assert(true, 'M63: 切回公众号面板，微信订阅内容仍在')
+
     // ============ M56 · 落盘下载明细：行内摘要 + 明细弹窗 + 常驻文库入口 ============
     // seed 一条含 downloadDetail 的检查记录（模拟定时自动下载已发生），再进订阅页断言可感知
     {
