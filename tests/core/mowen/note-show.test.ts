@@ -33,6 +33,36 @@ const albumBody = JSON.stringify({
   user: { base: { uid: 'u1', name: '池建强' } },
 })
 
+// 图集样本：裁剪自 2026-09-13 真机 6ipCTiFtt0yQRXNeSDA1w（池建强 CatBar 笔记）——
+// 多图笔记的图片是 <gallery uuid> 占位 + noteGallery.gallerys[G].fileUuids 有序引用；
+// 真机实测 fileUuids 声明 3 张、images 池只回 2 张（cL57P… 缺失），缺图是现实场景。
+const galleryBody = JSON.stringify({
+  detail: {
+    noteBase: {
+      uuid: '6ipCTiFtt0yQRXNeSDA1w', title: '发布第一款 Mac App：CatBar', digest: '',
+      content: '<p>产品图：</p><gallery uuid="T07Gx8UIZ_LYpekTbip_s"></gallery><p>尾部</p>',
+      publicAt: 1789088785, uid: 'u1',
+    },
+    noteFile: {
+      images: {
+        'c2ifY_y93bc3gqtA6stE-': { url: 'https://x/orig-1.png', scale: { w_1200: 'https://x/w1200-1.png' } },
+        'X0VmI0uXnqncojo0aJUy4': { url: 'https://x/orig-2.png', scale: { w_1200: 'https://x/w1200-2.png' } },
+      },
+      audios: {},
+    },
+    noteGallery: {
+      gids: ['T07Gx8UIZ_LYpekTbip_s'],
+      gallerys: {
+        T07Gx8UIZ_LYpekTbip_s: {
+          gid: 'T07Gx8UIZ_LYpekTbip_s',
+          fileUuids: ['c2ifY_y93bc3gqtA6stE-', 'X0VmI0uXnqncojo0aJUy4', 'cL57P7QSnYHwKtNAh4_sn'],
+        },
+      },
+    },
+  },
+  user: { base: { uid: 'u1', name: '池建强' } },
+})
+
 const paidBody = JSON.stringify({ code: 400, reason: 'ASSET_NOT_FOUND', message: 'asset not found', metadata: { skuId: '2056619449635758081' } })
 
 type FetchJson = (url: string, init: { method: 'POST'; body: string; headers: Record<string, string> }) => Promise<{ status: number; text: string }>
@@ -54,6 +84,25 @@ describe('fetchNoteShow', () => {
     expect(r.audios).toEqual(['https://audio.example/a.m4a'])
     // 正文里的 uuid 在映射缺失 → warning，不炸
     expect(r.warnings.some((w) => w.includes('MISSING-UUID-123456789'))).toBe(true)
+  })
+
+  it('图集：<gallery uuid> 按noteGallery.fileUuids 顺序展开为 img uuid 序列，缺图进 warning', async () => {
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', { fetchJson: async () => ({ status: 200, text: galleryBody }) })
+    // gallery 占位标签被展开，不再残留
+    expect(r.contentHtml).not.toContain('<gallery')
+    // 展开顺序与 fileUuids 一致（真机顺序：c2ifY → X0VmI → 缺失的 cL57P）
+    expect(r.contentHtml).toContain('<img uuid="c2ifY_y93bc3gqtA6stE-"><img uuid="X0VmI0uXnqncojo0aJUy4"><img uuid="cL57P7QSnYHwKtNAh4_sn">')
+    // 池里缺失的图走既有「映射缺失」warning，不静默
+    expect(r.warnings.some((w) => w.includes('cL57P7QSnYHwKtNAh4_sn'))).toBe(true)
+  })
+
+  it('图集 gid 无定义（被删/接口异常）→ warning + 原标签保留，不炸', async () => {
+    const galleryObj = JSON.parse(galleryBody)
+    galleryObj.detail.noteGallery = { gids: [], gallerys: {} }
+    const broken = JSON.stringify(galleryObj)
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', { fetchJson: async () => ({ status: 200, text: broken }) })
+    expect(r.contentHtml).toContain('<gallery uuid="T07Gx8UIZ_LYpekTbip_s">')
+    expect(r.warnings.some((w) => w.includes('图集定义缺失') && w.includes('T07Gx8UIZ_LYpekTbip_s'))).toBe(true)
   })
 
   it('publicAt 是字符串形态（真机实测 "1789088785"）也能解析', async () => {

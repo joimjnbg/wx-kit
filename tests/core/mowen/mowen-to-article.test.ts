@@ -32,8 +32,15 @@ describe('noteShowToParsedArticle', () => {
     expect(p.imageUrls).toEqual(['https://x/2.png', 'https://x/1.png'])
     expect(p.contentHtml).toContain('<img src="https://x/2.png"')
     expect(p.contentHtml).toContain('<img src="https://x/1.png"')
+    // 封面取正文首图（exporter 的 cover 分支靠 coverUrl 触发，此前硬编码空串是死参数）
+    expect(p.coverUrl).toBe('https://x/2.png')
     // 缺映射的 uuid 保留原标签（fetchNoteShow 已给 warning），不做静默删除
     expect(p.warnings.some((w) => w.includes('图片映射缺失'))).toBe(true)
+  })
+
+  it('无图笔记 coverUrl 保持空串（exporter 跳过 cover，不产出空文件）', () => {
+    const p = noteShowToParsedArticle(base({}))
+    expect(p.coverUrl).toBe('')
   })
 
   it('音频：注入 <audio controls> 到正文尾部', () => {

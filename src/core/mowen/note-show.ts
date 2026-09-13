@@ -63,8 +63,30 @@ export async function fetchNoteShow(uuid: string, deps: NoteShowDeps): Promise<N
   }
 
   const warnings: string[] = []
-  // 正文中的 uuid 缺映射（被删图/风控）→ 不炸但要说
-  for (const m of str(noteBase.content).matchAll(/<img\s+uuid="([^"]+)"/g)) {
+  // 图集展开：多图笔记的图片是 <gallery uuid="G"></gallery> 占位（真机 2026-09-13 池建强
+  // CatBar 笔记钉死），图片清单在 noteGallery.gallerys[G].fileUuids（有序）。原地展开为
+  // <img uuid> 序列，复用下方 uuid 重写/缺映射告警/下载既有链路；gid 无定义则保留原标签 +
+  // 告警（与缺映射同策略：不静默丢）。
+  const galleries = new Map<string, string[]>()
+  const noteGallery = isObj(detail.noteGallery) ? detail.noteGallery : {}
+  const gallerys = isObj(noteGallery.gallerys) ? noteGallery.gallerys : {}
+  for (const [gid, g] of Object.entries(gallerys)) {
+    if (!isObj(g) || !Array.isArray(g.fileUuids)) continue
+    galleries.set(gid, g.fileUuids.map(str).filter(Boolean))
+  }
+  const contentHtml = str(noteBase.content).replace(
+    /<gallery\s+uuid="([^"]+)"\s*>\s*<\/gallery>/g,
+    (whole, gid: string) => {
+      const fileUuids = galleries.get(gid)
+      if (!fileUuids) {
+        warnings.push(`图集定义缺失（gid=${gid}），图集内容未下载`)
+        return whole
+      }
+      return fileUuids.map((f) => `<img uuid="${f}">`).join('')
+    },
+  )
+  // 正文中的 uuid 缺映射（被删图/风控/图集声明了但池里没有）→ 不炸但要说
+  for (const m of contentHtml.matchAll(/<img\s+uuid="([^"]+)"/g)) {
     if (!images.has(m[1])) warnings.push(`图片映射缺失（uuid=${m[1]}），该图未下载`)
   }
 
@@ -72,7 +94,7 @@ export async function fetchNoteShow(uuid: string, deps: NoteShowDeps): Promise<N
     uuid: str(noteBase.uuid) || uuid,
     title: str(noteBase.title),
     digest: str(noteBase.digest),
-    contentHtml: str(noteBase.content),
+    contentHtml,
     publicAt: num(noteBase.publicAt),
     authorUid: str(userBase.uid),
     authorName: str(userBase.name),
