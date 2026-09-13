@@ -149,6 +149,12 @@ describe('formatCheckLogLine（M56 扩展）', () => {
     const bare: CheckLogEntry = { time: 1786000000000, trigger: 'manual', accounts: 1, newFound: 0, failed: 0 }
     expect(formatCheckLogLine(bare)).toBe('[2026-08-06T07:06:40.000Z] MANUAL accounts=1 new=0 failed=0')
   })
+  it('platform=mowen 输出标记；缺省 platform 不输出（M63）', () => {
+    const mowen: CheckLogEntry = { time: 1786000000000, trigger: 'manual', accounts: 1, newFound: 2, failed: 0, platform: 'mowen' }
+    expect(formatCheckLogLine(mowen)).toBe('[2026-08-06T07:06:40.000Z] MANUAL accounts=1 new=2 failed=0 platform=mowen')
+    const wechat: CheckLogEntry = { time: 1786000000000, trigger: 'manual', accounts: 1, newFound: 0, failed: 0 }
+    expect(formatCheckLogLine(wechat)).not.toContain('platform')
+  })
   it('新条目追加 downloaded=N existed=N；downloadDetail 不进单行', () => {
     const e: CheckLogEntry = {
       time: 1786000000000, trigger: 'auto', accounts: 3, newFound: 5, failed: 0,
