@@ -55,9 +55,9 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
       log: deps.logCheck,
       settings: { subscriptionNewArticleAction: settings.subscriptionNewArticleAction, defaultFormats: settings.defaultFormats },
       downloadNote: (noteId) => deps.downloadNote(noteId, settings.defaultFormats),
+      ...(uids?.length ? { uids } : {}),
     })
     broadcastUpdated()
-    void uids   // 行内单号检查与全量同一条编排路径（墨问作者数通常个位数，全量成本低）
     return result
   }
 
