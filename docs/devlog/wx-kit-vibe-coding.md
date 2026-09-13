@@ -1239,3 +1239,34 @@ mowen 分支不用 fetchHtml，要求调用方提供它纯属类型层面的惯�
 **真机验收全过**：单篇（图落地 img-1.png、publishTime、作者目录）、付费（unavailable 明细话术）、
 合集默认（引用块 md 渲染 + warning）、合集 --expand-refs（子笔记入库）、--uid 批量（2 篇含判重 skip）。
 627 单测 + tsc + lint + e2e 全绿（M61 tab 三条断言）。
+
+### M61 补实录：gallery 图集静默丢图——同一类坑第二次踩（2026-09-13，安哥 GUI 实测揪出）
+
+**故事**：M61 真机验收全过之后的第一个真实用户反馈来自安哥本人：GUI 按链接下载池建强的
+CatBar 笔记，文字在、图片一张没有，warnings 空、报成功。诊断只花了一轮：抓 note/show 原始返回，
+content 里的图片根本不是 `<img uuid>`，而是 `<gallery uuid="G"></gallery>` 占位——图片清单挂在
+`detail.noteGallery.gallerys[G].fileUuids`（有序），每个 fileUuid 再去 `noteFile.images` 池里拿
+签名 URL。M61 只实现了单图形态。
+
+**为什么验收没兜住**：M61 验收用的样本恰好是 `<img>` 单图笔记——**「验收通过」只证明「样本里的
+形态走通了」，不证明「这个内容源只有这些形态」**。内容解析器的验收样本要刻意找形态最丰富的，
+不是最顺手的。更扎心的对照：微信 M36 的教训是「`item_show_type` 是开放集合，未知类型必须兜底 +
+warnings」，墨问这次是「资源占位标签（img/gallery/audio/video/pdf…）是开放集合，没枚举全就静默」
+——**同一条原则跨平台第二次踩**，第一次靠「解析分发 + 告警」治了微信，这次轮到墨问却没有把
+原则平移过来。
+
+**修复形状（最小改动，复用既有链路）**：`fetchNoteShow` 解析 noteGallery，把 `<gallery uuid=G>`
+原地展开为 `<img uuid=fileUuid>` 序列（顺序保留）——展开后的标签落进既有「uuid 重写 / 缺映射
+告警 / 下载」管道，adapter 与 exporter 零改动。gid 无定义保留原标签 + 告警（与缺映射同策略）。
+真机数据还白送一个边界：这篇图集声明 3 张图、images 池只回 2 张——修复后缺失那张如实报
+「图片映射缺失」，不再静默。
+
+**顺带修掉一个死参数**：`mowen-to-article` 硬编码 `coverUrl: ''`，exporter 的 cover 分支条件是
+`formats.includes('cover') && parsed.coverUrl`——墨问的 `--formats cover` 从上线起就永远不产出。
+修复为取正文首图（与微信「封面取文章图」同口径）。这次是排查图片时顺藤摸出来的：**「formats
+声明了但产物里没有」这类不自洽，排查A现象时值得顺手全查一遍**。
+
+**验证**：630 单测（+3：gallery 展开 / gid 无定义告警 / cover 取首图）+ tsc + lint 全绿；真机
+重下池建强 CatBar 笔记——images/ 两张落盘、cover.png 477KB、md 本地引用、缺失第三张图 warning
+如实上报。教训入库：**接一个新内容源，第一件事是拿「图最多、形态最杂」的样本跑一遍，而不是
+拿最容易的**。
