@@ -40,6 +40,8 @@ function buildRefsBlock(refNoteIds: string[]): string {
 }
 
 export function noteShowToParsedArticle(r: NoteShowResult): ParsedArticle {
+  // 封面取正文首图（墨问没有独立封面字段泛用形态，noteCover 实测多为空数组）；
+  // exporter 的 cover 分支靠 coverUrl 触发——此前硬编码空串让 --formats cover 成为死参数。
   const { html: withLocalImg, urls } = rewriteUuidImages(r.contentHtml, r.images)
 
   // 音频嵌入（PRD：不落地，失效即失效）；追加在正文尾部
@@ -61,7 +63,7 @@ export function noteShowToParsedArticle(r: NoteShowResult): ParsedArticle {
     account: r.authorName,   // 目录按作者建（墨问没有「公众号」概念）
     publishTime: r.publicAt != null ? formatCnTime(r.publicAt) : '',
     digest: r.digest,
-    coverUrl: '',
+    coverUrl: urls[0] ?? '',
     contentHtml: html,
     imageUrls: urls,
     videos: [],
