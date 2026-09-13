@@ -25,6 +25,8 @@ export interface MowenCheckDeps {
   downloadNote: (noteId: string) => Promise<DownloadItemResult>
   /** 注入点，缺省真实现 */
   listUserNotes?: typeof listUserNotes
+  /** 行内单作者检查：只查这些 uid（缺省全量）。 */
+  uids?: string[]
 }
 
 export interface MowenPerAuthorResult {
@@ -45,6 +47,7 @@ export async function runMowenSubscriptionCheck(trigger: 'auto' | 'manual', deps
   const now = Date.now()
   const baseLog = { trigger, platform: 'mowen' as const, time: now }
   const authors = (await deps.subs.list()).filter((a) => a.subscribed)
+    .filter((a) => (deps.uids ? deps.uids.includes(a.uid) : true))
 
   if (!authors.length) {
     await deps.log({ ...baseLog, accounts: 0, newFound: 0, failed: 0, note: 'no-authors' })

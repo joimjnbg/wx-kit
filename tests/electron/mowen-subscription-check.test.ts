@@ -120,4 +120,19 @@ describe('runMowenSubscriptionCheck', () => {
     expect(r.results[0]).toMatchObject({ ok: true, newFound: 1, downloaded: 0, unavailable: 1 })
     expect((await h.subs.list())[0].newNotes[0].status).toBe('pending')
   })
+
+  it('uids 过滤：只检查指定作者（行内单作者检查）', async () => {
+    const h = await harness()
+    await h.subs.addAuthor({ uid: 'u2', name: '另一个', intro: '', watermark: 1789000000 })
+    const calls: string[] = []
+    const deps: MowenCheckDeps = {
+      ...h.deps,
+      uids: ['u2'],
+      listUserNotes: async (_run, uid: string) => { calls.push(uid); return [item('n9', 1789199999)] },
+    }
+    const r = await runMowenSubscriptionCheck('manual', deps)
+    expect(r.authors).toBe(1)
+    expect(calls).toEqual(['u2'])
+    expect(h.logs[0].accounts).toBe(1)
+  })
 })

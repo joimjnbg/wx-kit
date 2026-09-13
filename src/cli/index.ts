@@ -34,6 +34,9 @@ import { SettingsService } from '../../electron/services/settings'
 import { parseSettingAssignment } from '../../electron/services/settings-cli'
 import { History, eventFromSummary, type HistorySource } from '../core/download-history'
 import { Subscriptions, accountsFromHistory, mergeAccounts, formatCheckLogLine, normalizeAccountKey } from '../core/subscriptions'
+import { MowenSubscriptions } from '../core/mowen/subscription'
+import { runMowenSubscriptionCheck } from '../../electron/services/mowen-subscription-check'
+import { subscribeAuthor } from '../../electron/services/mowen-ipc'
 import { nextCheckAt } from '../core/subscription-schedule'
 import { resolveDigestDate } from '../core/digest-date'
 import { subscriptionDigest, type DigestFailure } from '../core/subscription-digest'
@@ -725,6 +728,86 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
       const summary = await queue.run(urls)
       out(summary)
       exitCode = summary.ok ? 0 : 1
+    })
+
+  // —— M63 墨问作者订阅（与公众号订阅同构：subscribe / unsubscribe / list / check-now）——
+  mowen.command('subscribe').description('订阅墨问作者（先搜索确认，再带 --uid 订阅；订阅不回补历史）')
+    .requiredOption('--keyword <kw>', '作者名字关键词')
+    .option('--uid <uid>', '确认订阅的作者 uid（来自候选列表；缺省只搜索输出候选）')
+    .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
+    .action(async (opts) => {
+      const run = await mowenRunnerOf()
+      if (!run) return
+      try {
+        const subs = new MowenSubscriptions(await resolveRoot(opts.out))
+        const r = await subscribeAuthor(run, subs, String(opts.keyword), opts.uid ? String(opts.uid) : undefined)
+        outJson(r)
+        if (!r.ok) exitCode = 1
+      } catch (e) {
+        if (e instanceof MocliFailed) { outJson({ ok: false, error: { code: 'MOCLI_FAILED', reason: e.reason, message: e.message } }); exitCode = 1; return }
+        throw e
+      }
+    })
+  mowen.command('unsubscribe').description('退订墨问作者')
+    .requiredOption('--uid <uid>', '作者 uid（从 mowen list 取）')
+    .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
+    .action(async (opts) => {
+      const subs = new MowenSubscriptions(await resolveRoot(opts.out))
+      const existed = await subs.hasAuthor(String(opts.uid))
+      if (!existed) { outJson({ ok: false, error: { code: 'NOT_FOUND', message: '订阅列表中没有该作者' } }); exitCode = 1; return }
+      await subs.removeAuthor(String(opts.uid))
+      outJson({ ok: true, removed: 1 })
+    })
+  mowen.command('list').description('墨问作者订阅列表（含各作者待处理新笔记摘要）')
+    .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
+    .action(async (opts) => {
+      const subs = new MowenSubscriptions(await resolveRoot(opts.out))
+      const authors = (await subs.list()).filter((a) => a.subscribed)
+      outJson({
+        ok: true,
+        authors: authors.map((a) => ({
+          uid: a.uid, name: a.name, intro: a.intro, watermark: a.watermark,
+          lastCheckedAt: a.lastCheckedAt,
+          newCount: a.newNotes.filter((n) => n.status === 'pending').length,
+          newNotes: a.newNotes,
+        })),
+      })
+    })
+  mowen.command('check-now').description('立即检查墨问订阅更新（水位推进；失败如实逐作者明细）')
+    .option('--uid <uid>', '只检查该作者（行内检查场景；缺省全量）')
+    .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
+    .action(async (opts) => {
+      const run = await mowenRunnerOf()
+      if (!run) return
+      const root = await resolveRoot(opts.out)
+      const s = await settingsFor().get()
+      const subs = new MowenSubscriptions(root)
+      const wechatSubs = new Subscriptions(root)   // 检查日志与微信共用同一通道（platform 字段区分）
+      const logFilePath = join(userDataDir, 'subscriptions-check.log')
+      const formats = parseFormats(s.defaultFormats.join(','))
+      const result = await runMowenSubscriptionCheck('manual', {
+        subs, runner: run,
+        ...(opts.uid ? { uids: [String(opts.uid)] } : {}),
+        log: async (e) => {
+          try { await wechatSubs.appendCheckLog(e); appendFileSync(logFilePath, formatCheckLogLine(e) + '\n') } catch { /* 留痕失败不阻断 */ }
+          process.stderr.write(formatCheckLogLine(e) + '\n')
+        },
+        settings: { subscriptionNewArticleAction: s.subscriptionNewArticleAction, defaultFormats: s.defaultFormats },
+        downloadNote: async (noteId) => {
+          const library = new Library(root)
+          const r = await downloadMowenNote(noteId, formats, {
+            fetchBinary: mpArticleFetchers().fetchBinary, BrowserWindowCtor: BrowserWindow,
+            now: () => new Date().toISOString(), library, libraryRoot: root, downloadVideos: s.downloadVideos,
+          })
+          try {
+            const summary = { ok: r.ok, total: 1, succeeded: r.ok && !r.skipped ? 1 : 0, failed: r.ok ? 0 : 1, skipped: r.skipped ? 1 : 0, items: [r] }
+            await new History(root, s.historyRetentionDays).append(eventFromSummary(randId(), Date.now(), { kind: 'url', count: 1 }, formats, summary))
+          } catch { /* 历史是辅助记录，写失败不阻断 */ }
+          return r
+        },
+      })
+      outJson({ ok: true, authors: result.authors, newFound: result.newFound, failed: result.failed, results: result.results, ...(result.note ? { note: result.note } : {}) })
+      exitCode = result.failed > 0 ? 1 : 0
     })
 
   const settings = program.command('settings').description('读写应用设置(子命令:get / set)')
