@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Input, Switch, Button, Spin, Alert, message, List, Tag, Modal, Checkbox, Popconfirm } from 'antd'
+import { Input, Segmented, Switch, Button, Spin, Alert, message, List, Tag, Modal, Checkbox, Popconfirm } from 'antd'
 import { LoadingOutlined, SettingOutlined, DeleteOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import type { SubscribedAccount, CheckLogEntry, PerAccountResult, RunCheckResult } from '../api'
@@ -8,6 +8,7 @@ import type { NewArticleAction } from '../../../electron/services/settings'
 import type { MpAccount } from '../../core/mp-types'
 import { refId } from '../../core/subscription-refs'
 import { updatePerAccountProgress, type PerAccountDownloadState } from '../subscription-progress'
+import MowenPanel from '../components/subscription/MowenPanel'
 import {
   latestResultByAccount, latestItemsForAccount, summaryPhrase, triggerLabel, formatShortTime, itemStatusTag, detailModalTitle,
 } from '../subscription-view'
@@ -18,6 +19,8 @@ const RESULT_TTL_MS = 8000
 
 export default function Subscriptions() {
   const navigate = useNavigate()
+  // 平台切换（M63 R4a）：默认公众号；墨问面板自包含状态，切走即卸载（数据落盘，重进重读）
+  const [platform, setPlatform] = useState<'wechat' | 'mowen'>('wechat')
   const [accounts, setAccounts] = useState<SubscribedAccount[]>([])
   const [authExpired, setAuthExpired] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -360,6 +363,13 @@ export default function Subscriptions() {
           <h1 className="page-title">订阅</h1>
         </div>
 
+        <div style={{ marginBottom: 16 }} data-testid="subs-platform-tab">
+          <Segmented value={platform} onChange={(v) => setPlatform(v as 'wechat' | 'mowen')}
+            options={[{ label: '公众号', value: 'wechat' }, { label: '墨问作者', value: 'mowen' }]} />
+        </div>
+
+        {platform === 'mowen' ? <MowenPanel /> : <>
+
         {authExpired && <Alert type="warning" showIcon style={{ marginBottom: 16 }}
           message="订阅检查需重新登录微信读书" description="到「设置」页重新扫码登录后，订阅检查会自动恢复。" />}
 
@@ -506,6 +516,7 @@ export default function Subscriptions() {
                 </List.Item>
               )} />}
         </div>
+        </>}
       </div>
     </div>
   )

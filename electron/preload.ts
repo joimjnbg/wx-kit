@@ -65,6 +65,17 @@ const api: WxApi = {
     ipcRenderer.on('subscriptions:updated', listener)
     return () => { ipcRenderer.removeListener('subscriptions:updated', listener) }
   },
+  mowenSubsList: () => ipcRenderer.invoke('mowen-subs:list'),
+  mowenSubsAdd: (keyword, uid) => ipcRenderer.invoke('mowen-subs:add', keyword, uid),
+  mowenSubsRemove: (uid) => ipcRenderer.invoke('mowen-subs:remove', uid),
+  mowenSubsCheckNow: (uids) => ipcRenderer.invoke('mowen-subs:checkNow', uids),
+  mowenSubsDownloadNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:downloadNotes', uid, noteIds),
+  mowenSubsDismissNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:dismissNotes', uid, noteIds),
+  onMowenSubsUpdated: (cb) => {
+    const listener = () => cb()
+    ipcRenderer.on('mowen-subs:updated', listener)
+    return () => { ipcRenderer.removeListener('mowen-subs:updated', listener) }
+  },
   onSubscriptionDownloadProgress: (cb) => {
     const listener = (_e: unknown, ev: Parameters<typeof cb>[0]) => cb(ev)
     ipcRenderer.on('subscriptions:download:progress', listener)
