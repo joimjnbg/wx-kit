@@ -6,7 +6,8 @@ import type { SettingsService } from './settings'
 
 export interface SchedulerDeps {
   settings: SettingsService
-  subsFor: () => Promise<Subscriptions>
+  /** M63 起墨问调度复用本类：只需 getLastRunAt，不要求完整 Subscriptions 形态 */
+  subsFor: () => Promise<Pick<Subscriptions, 'getLastRunAt'>>
   /** 返回值 scheduler 不关心(M34 起检查会回传逐号明细,给手动检查的行内反馈用) */
   runCheck: () => Promise<unknown>
   /** 全局请求保护已暂停/熔断时，不启动业务检查，也不制造重复失败日志。 */

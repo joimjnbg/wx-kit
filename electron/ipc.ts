@@ -27,7 +27,11 @@ import { refId, sourceUrlKey } from '../src/core/subscription-refs'
 import { collectPendingDownloads, toAccountDownloadLog, countDownloadOutcomes, mergeCheckDetailItems } from '../src/core/subscription-batch'
 import { SubscriptionScheduler } from './services/subscription-scheduler'
 import { UpdateScheduler } from './services/update-scheduler'
-import { registerMowenIpc } from './services/mowen-detect'
+import { registerMowenIpc, mowenRunnerOrNull } from './services/mowen-detect'
+import { registerMowenSubscriptionIpc } from './services/mowen-ipc'
+import { downloadMowenNote } from '../src/core/mowen/download-mowen-note'
+import { MowenSubscriptions } from '../src/core/mowen/subscription'
+import { runMowenSubscriptionCheck } from './services/mowen-subscription-check'
 import { SettingsService } from './services/settings'
 import { runSubscriptionCheck as svcRunSubscriptionCheck } from './services/subscription-check'
 import type { RunCheckResult } from './services/subscription-check'
@@ -356,6 +360,53 @@ export function registerIpc(settings: SettingsService): void {
     try { await subs.appendCheckLog(entry); appendFileSync(logPath, formatCheckLogLine(entry) + '\n') }
     catch { /* 留痕失败不阻断检查主流程 */ }
   }
+
+  // —— M63 墨问作者订阅：检查日志与微信共用同一通道（checkLog 数组 + 行日志），platform 区分 ——
+  // 下载组装对齐上方 'download' handler 的 deps 形态（downloadMowenNote 自带判重/图片本地化）；
+  // 下载历史同记录（辅助留痕，失败不阻断）。
+  const mowenDownloadNote = async (noteId: string, formats: DownloadFormat[]) => {
+    const s = await settings.get()
+    const library = new Library(s.libraryRoot)
+    const result = await downloadMowenNote(noteId, formats, {
+      fetchBinary, BrowserWindowCtor: BrowserWindow,
+      now: () => new Date().toISOString(), library, libraryRoot: s.libraryRoot, downloadVideos: s.downloadVideos,
+    })
+    await recordHistory({ kind: 'url', count: 1 }, formats, {
+      ok: result.ok, total: 1,
+      succeeded: result.ok && !result.skipped ? 1 : 0,
+      failed: result.ok ? 0 : 1,
+      skipped: result.skipped ? 1 : 0,
+      items: [result],
+    })
+    return result
+  }
+  registerMowenSubscriptionIpc({
+    settings,
+    logCheck: async (entry) => logCheck(await subsFor(), entry),
+    downloadNote: mowenDownloadNote,
+    broadcast: (channel) => {
+      for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(channel)
+    },
+  })
+  // 调度与微信共用设置键（PRD R4 拍板），但 scheduler 实例独立——canRun 各自闸门：
+  // 微信未登录(mpGateway 非 active)只跳过微信 tick，墨问只看 mocli 装没装，两平台互不阻塞。
+  new SubscriptionScheduler({
+    settings,
+    subsFor: async () => new MowenSubscriptions((await settings.get()).libraryRoot),
+    runCheck: async () => {
+      const runner = await mowenRunnerOrNull()
+      if (!runner) return
+      const s = await settings.get()
+      return runMowenSubscriptionCheck('auto', {
+        subs: new MowenSubscriptions(s.libraryRoot),
+        runner,
+        log: async (entry) => logCheck(await subsFor(), entry),
+        settings: { subscriptionNewArticleAction: s.subscriptionNewArticleAction, defaultFormats: s.defaultFormats },
+        downloadNote: (noteId) => mowenDownloadNote(noteId, s.defaultFormats),
+      })
+    },
+    canRun: async () => (await mowenRunnerOrNull()) !== null,
+  }).start()
 
   // 共享 in-flight:自动检查与手动「检查更新」/行内单号检查重叠时并入同一次运行(防重入的第二道闸,第一道在 scheduler tick)
   let checkInFlight: Promise<RunCheckResult> | null = null

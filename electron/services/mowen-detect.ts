@@ -9,8 +9,8 @@ import { searchUsers, listUserNotes } from '../../src/core/mowen/metadata'
 import { MocliFailed, MocliNotFound } from '../../src/core/mowen/errors'
 import { ipcMain } from 'electron'
 
-/** GUI 发现链路的前置检测:未装返回 null(调用方给 MOCLI_NOT_FOUND 载荷)。 */
-async function mowenRunnerOrNull() {
+/** GUI 发现链路的前置检测:未装返回 null(调用方给 MOCLI_NOT_FOUND 载荷)。M63 起订阅 IPC 共用。 */
+export async function mowenRunnerOrNull() {
   const r = await detectMocli(createMocliRunner(), createWhichRunner())
   return r.installed ? createMocliRunner() : null
 }
