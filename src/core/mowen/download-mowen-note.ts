@@ -26,6 +26,44 @@ export interface MowenDownloadDeps extends Omit<DownloadArticleDeps, 'fetchHtml'
 
 export interface RefDownloadRecord { uuid: string; ok: boolean; skipped?: boolean; unavailable?: boolean; title?: string }
 
+/** 合集递归（显式开关）：子笔记走同一条下载路径，判重/限速/unavailable 天然复用。
+ *  返回 undefined = 没有可展开的引用（或已达深度上限）。
+ *  v0.11.0：此前展开逻辑内联在完整下载流程末尾——父本体已入库时判重提前 return，
+ *  展开永远走不到（卡片「补下引用子笔记」点了没反应的根因），故抽出供判重分支复用。 */
+async function expandRefNotes(
+  refNoteIds: string[],
+  formats: DownloadFormat[],
+  deps: MowenDownloadDeps,
+  depth: number,
+): Promise<{ total: number; unavailable: string[] } | undefined> {
+  if (!refNoteIds.length) return undefined
+  // REF_DEPTH_LIMIT = 最多展开的引用层数（本笔记为第 1 层）。
+  // 本层 depth 已 >= 上限 → 不再展开下一层（l4 是第 4 层，l3 的 depth=2 时还能下它，
+  // 但 l4 自己 depth=3 的展开会被拦住——链式第 4 层不入库）。
+  if (depth + 1 >= REF_DEPTH_LIMIT) {
+    deps.onWarning?.(`引用展开已达上限 ${REF_DEPTH_LIMIT} 层，更深层级未下载`)
+    return undefined
+  }
+  const unavailable: string[] = []
+  let total = 0
+  for (const childUuid of refNoteIds) {
+    // 子笔记已在库（含「兄弟引用同一篇」）→ 判重跳过，不计入本轮下载量
+    if (await deps.library.has(`mowen_${childUuid}`)) continue
+    total++
+    // 深度内递归；子笔记沿链继续展开（深度递增），unavailable 如实归集不阻塞兄弟
+    try {
+      await downloadMowenNote(childUuid, formats, deps, depth + 1)
+    } catch (e) {
+      if (e instanceof MowenNoteUnavailable) unavailable.push(childUuid)
+      else throw e
+    }
+  }
+  if (unavailable.length) {
+    deps.onWarning?.(`${unavailable.length} 篇引用子笔记不可匿名获取（付费/私密），已如实跳过`)
+  }
+  return { total, unavailable }
+}
+
 export async function downloadMowenNote(
   input: string,
   formats: DownloadFormat[],
@@ -39,7 +77,28 @@ export async function downloadMowenNote(
 
   if (await deps.library.has(id)) {
     const existing = await deps.library.get(id)
-    return { url, ok: true, id, skipped: true, title: existing?.title, dir: existing?.dir }
+    // 本体判重跳过 ≠ 引用展开也跳过：卡片「补下引用子笔记」/ CLI --expand-refs 在
+    // 本体已入库时同样要展开子笔记——需要一次 note/show 拿引用清单（必要成本）。
+    // note/show 失败不阻塞 skipped 返回（本体本来就已在库）。
+    let expanded: { total: number; unavailable: string[] } | undefined
+    if (deps.expandRefs) {
+      try {
+        const show = deps.fetchNoteShow
+          ? await deps.fetchNoteShow(uuid)
+          : await fetchNoteShow(uuid, { fetchJson: defaultFetchJson })
+        expanded = await expandRefNotes(show.refNoteIds, formats, deps, depth)
+      } catch (e) {
+        if (e instanceof MowenNoteUnavailable) {
+          deps.onWarning?.('本篇不可匿名获取（付费/私密），引用未展开')
+        } else {
+          deps.onWarning?.(`引用展开失败：${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+    }
+    return {
+      url, ok: true, id, skipped: true, title: existing?.title, dir: existing?.dir,
+      ...(expanded ? { refResults: expanded } : {}),
+    }
   }
 
   deps.onProgress?.({ phase: 'fetch', message: '获取墨问笔记' })
@@ -65,34 +124,7 @@ export async function downloadMowenNote(
   await deps.library.add(meta)
 
   // —— 合集递归（显式开关）：子笔记走同一条下载路径，判重/限速/unavailable 天然复用 ——
-  let refResults: { total: number; unavailable: string[] } | undefined
-  if (deps.expandRefs && show.refNoteIds.length) {
-    // REF_DEPTH_LIMIT = 最多展开的引用层数（本笔记为第 1 层）。
-    // 本层 depth 已 >= 上限 → 不再展开下一层（l4 是第 4 层，l3 的 depth=2 时还能下它，
-    // 但 l4 自己 depth=3 的展开会被拦住——链式第 4 层不入库）。
-    if (depth + 1 >= REF_DEPTH_LIMIT) {
-      deps.onWarning?.(`引用展开已达上限 ${REF_DEPTH_LIMIT} 层，更深层级未下载（uuid=${uuid}）`)
-    } else {
-      const unavailable: string[] = []
-      let total = 0
-      for (const childUuid of show.refNoteIds) {
-        // 子笔记已在库（含「兄弟引用同一篇」）→ 判重跳过，不计入本轮下载量
-        if (await deps.library.has(`mowen_${childUuid}`)) continue
-        total++
-        // 深度内递归；子笔记沿链继续展开（深度递增），unavailable 如实归集不阻塞兄弟
-        try {
-          await downloadMowenNote(childUuid, formats, deps, depth + 1)
-        } catch (e) {
-          if (e instanceof MowenNoteUnavailable) unavailable.push(childUuid)
-          else throw e
-        }
-      }
-      refResults = { total, unavailable }
-      if (unavailable.length) {
-        deps.onWarning?.(`${unavailable.length} 篇引用子笔记不可匿名获取（付费/私密），已如实跳过`)
-      }
-    }
-  }
+  const refResults = deps.expandRefs ? await expandRefNotes(show.refNoteIds, formats, deps, depth) : undefined
 
   return {
     url, ok: true, id, dir, formats: meta.formats, title: meta.title,
