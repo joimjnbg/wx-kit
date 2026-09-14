@@ -118,6 +118,15 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
     }
     // M58 同规：把本次结果回填进「本轮检查明细」——行内 pending 就地变为结果态（已下载/文库已有）
     await deps.mutateLatestCheckDetail(uid, (cur) => mergeCheckDetailItems(cur, resultItems))
+    // 落一条「补下载」日志（v0.11.0 安哥实测反馈：订阅页点下载走此 IPC，原来不写 logCheck，
+    // 「库里有笔记但检查记录不见」无从追查）——对齐微信 subscriptions:downloadNew 的 kind='download' 行为。
+    if (noteIds.length) {
+      await deps.logCheck({
+        time: Date.now(), trigger: 'manual', kind: 'download', platform: 'mowen',
+        accounts: 1, newFound: 0, failed,
+        downloaded, existed, downloadDetail: [{ fakeid: uid, nickname: (await (await subsOf()).list()).find((a) => a.uid === uid)?.name ?? uid, items: resultItems }],
+      })
+    }
     broadcastUpdated()
     return { downloaded, existed, failed }
   })
