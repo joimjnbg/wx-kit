@@ -167,7 +167,7 @@ export function registerIpc(settings: SettingsService): void {
     return { profilePath, result }
   })
 
-  ipcMain.handle('download', async (event, { urls, formats }: { urls: string[]; formats: DownloadFormat[] }) => {
+  ipcMain.handle('download', async (event, { urls, formats, expandRefs }: { urls: string[]; formats: DownloadFormat[]; expandRefs?: boolean }) => {
     const { libraryRoot, downloadVideos } = await settings.get()
     const library = new Library(libraryRoot)
     // M49：显式 URL 下载自动开启本次请求许可；用户已无 protection 设置入口，
@@ -176,6 +176,8 @@ export function registerIpc(settings: SettingsService): void {
     const deps = {
       fetchHtml, fetchBinary, BrowserWindowCtor: BrowserWindow,
       now: () => new Date().toISOString(), library, libraryRoot, downloadVideos,
+      // M63 修复：墨问合集的显式展开开关（此前 GUI 勾选从未接线，只有 CLI --expand-refs 生效）
+      expandRefs: expandRefs === true,
     }
     const sendProgress = (ev: import('../src/core/types').ProgressEvent) => {
       if (!event.sender.isDestroyed()) event.sender.send('download:progress', ev)
