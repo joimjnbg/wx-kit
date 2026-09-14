@@ -69,7 +69,7 @@ export default function UrlMode({ onDone, prefill }: Props) {
             data-testid="url-input"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={'粘贴微信公众号文章链接，每行一个，支持批量\nhttps://mp.weixin.qq.com/s/...'}
+            placeholder={'粘贴微信文章或墨问笔记链接，每行一个，支持批量\nhttps://mp.weixin.qq.com/s/...\nhttps://note.mowen.cn/detail/...'}
             autoSize={{ minRows: 4, maxRows: 12 }}
             disabled={running}
             style={{ fontSize: 14, background: 'var(--paper)' }}
