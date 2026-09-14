@@ -383,6 +383,7 @@ export function registerIpc(settings: SettingsService): void {
   registerMowenSubscriptionIpc({
     settings,
     logCheck: async (entry) => logCheck(await subsFor(), entry),
+    mutateLatestCheckDetail: async (uid, fn) => (await subsFor()).mutateLatestCheckDetail(uid, fn),
     downloadNote: mowenDownloadNote,
     broadcast: (channel) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(channel)

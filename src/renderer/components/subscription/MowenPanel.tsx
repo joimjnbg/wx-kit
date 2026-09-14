@@ -342,7 +342,7 @@ export default function MowenPanel() {
             <div>上方搜索作者名字，确认简介后订阅；之后的更新会出现在这里。</div>
           </div>
         ) : (
-          <List dataSource={authors} data-testid="mowen-subs-list" renderItem={(a) => {
+          <List dataSource={authors} className="subs-row-list" data-testid="mowen-subs-list" renderItem={(a) => {
             const pending = pendingOf(a)
             const thisChecking = checkingIds.includes(a.uid)
             const checkEl = thisChecking

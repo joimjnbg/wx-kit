@@ -754,3 +754,7 @@ body {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .subs-pending-time { font-size: 12px; white-space: nowrap; }
+/* 订阅行动作区与订阅开关顶对齐（M63 实测反馈）：antd 行默认垂直居中，展开明细越多
+   居中的动作链/开关越深入清单区（与内容交叠）。钉在行头后两平台表现一致、不随明细数漂移。 */
+.subs-row-list .ant-list-item { align-items: flex-start; }
+.subs-row-list .ant-list-item-action, .subs-row-list .ant-switch { margin-top: 9px; }

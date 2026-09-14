@@ -7,8 +7,9 @@ import { MowenSubscriptions } from '../../src/core/mowen/subscription'
 import { runMowenSubscriptionCheck, type MowenCheckResult } from './mowen-subscription-check'
 import { searchUsers } from '../../src/core/mowen/metadata'
 import { mowenRunnerOrNull } from './mowen-detect'
+import { mergeCheckDetailItems } from '../../src/core/subscription-batch'
 import type { MocliRunner, MowenUser } from '../../src/core/mowen/types'
-import type { CheckLogEntry } from '../../src/core/subscriptions'
+import type { CheckLogEntry, DownloadItemLog } from '../../src/core/subscriptions'
 import type { DownloadFormat, DownloadItemResult } from '../../src/core/types'
 import type { SettingsService } from './settings'
 
@@ -39,6 +40,8 @@ export interface MowenSubsIpcDeps {
   settings: SettingsService
   /** 与微信共用的检查日志通道（ipc.ts 适配：写 subscriptions.json 的 checkLog + 行日志文件） */
   logCheck: (entry: CheckLogEntry) => Promise<void>
+  /** 就地更新最近一条检查明细（共用微信 subscriptions.json 的 checkLog；M58 同规） */
+  mutateLatestCheckDetail: (uid: string, fn: (items: DownloadItemLog[]) => DownloadItemLog[]) => Promise<boolean>
   /** 单篇下载（ipc.ts 组装完整 downloadMowenNote 通道：library 判重/图片本地化/offscreen PDF） */
   downloadNote: (noteId: string, formats: DownloadFormat[]) => Promise<DownloadItemResult>
   broadcast: (channel: string) => void
@@ -90,14 +93,26 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
   ipcMain.handle('mowen-subs:downloadNotes', async (_e, uid: string, noteIds: string[]) => {
     const subs = await subsOf()
     const formats = await formatsOf()
+    // 回填「本轮检查明细」要带标题：从 newNotes 取（明细条目按 url 合并、title 随结果态更新）
+    const author = (await subs.list()).find((a) => a.uid === uid)
+    const titleOf = (id: string) => author?.newNotes.find((n) => n.noteId === id)?.title ?? '(无标题)'
     let downloaded = 0, existed = 0, failed = 0
+    const resultItems: DownloadItemLog[] = []
     for (const noteId of noteIds) {
+      const url = author?.newNotes.find((n) => n.noteId === noteId)?.url
       try {
         const r = await deps.downloadNote(noteId, formats)
         if (r.skipped) existed++; else downloaded++
         await subs.setNoteStatus(uid, [noteId], 'downloaded')
-      } catch { failed++ }   // 失败保留 pending 状态，行内可重试
+        resultItems.push({ title: titleOf(noteId), status: r.skipped ? 'exists' : 'downloaded', ...(r.id ? { articleId: r.id } : {}), ...(url ? { url } : {}), refId: noteId })
+      } catch (e) {
+        // 失败保留 pending 状态，行内可重试；明细如实落 failed
+        failed++
+        resultItems.push({ title: titleOf(noteId), status: 'failed', error: e instanceof Error ? e.message : String(e), ...(url ? { url } : {}), refId: noteId })
+      }
     }
+    // M58 同规：把本次结果回填进「本轮检查明细」——行内 pending 就地变为结果态（已下载/文库已有）
+    await deps.mutateLatestCheckDetail(uid, (cur) => mergeCheckDetailItems(cur, resultItems))
     broadcastUpdated()
     return { downloaded, existed, failed }
   })
