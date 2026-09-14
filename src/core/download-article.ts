@@ -13,6 +13,7 @@ import { globalRequestStopCode } from './mp-errors'
 import { normalizeAccountId } from './weread/book-id'
 import { extractMowenNoteId } from './mowen/url'
 import { downloadMowenNote } from './mowen/download-mowen-note'
+import { renderWeChatArticleContent } from './wechat-render'
 
 export interface DownloadArticleDeps extends ExportDeps {
   fetchHtml: (url: string) => Promise<string>
@@ -111,6 +112,21 @@ export async function downloadArticle(
 
   if (parsePublicationTime(parsed.publishTime) == null) {
     parsed.warnings.push('未解析到有效发表时间，正文已保存；该文章暂不归入按发表日期查询的日报。')
+  }
+
+  // —— 贴图/图片消息新模板兜底（2026-09-14 安哥实测反馈）：该模板的 SSR 是 JS 壳（无
+  // #js_content、无 picture_page_info_list），解析层空手而归却零告警、报成功。此处以渲染
+  // 方式补取正文与图片；仍拿不到则如实告警，不再静默产出只有刊头的空文件。 ——
+  if (!parsed.contentHtml.trim() && !parsed.imageUrls.length) {
+    deps.onProgress?.({ phase: 'fetch', message: '页面需渲染，正在提取正文' })
+    const rendered = await renderWeChatArticleContent(url, deps.BrowserWindowCtor)
+    if (rendered) {
+      parsed.contentHtml = rendered.contentHtml
+      parsed.imageUrls.push(...rendered.imageUrls)
+      parsed.warnings.push('该篇为图片/贴图消息，正文由页面脚本渲染，已用浏览器渲染方式提取，建议核对该篇内容。')
+    } else {
+      parsed.warnings.push('正文与图片均未取到（页面模板可能已改版），仅保存标题与元信息，请打开原文核对。')
+    }
   }
   const accountDir = join(deps.libraryRoot, sanitizeName(parsed.account || 'unknown'))
   const datePrefix = parsed.publishTime.slice(0, 10)
