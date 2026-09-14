@@ -56,7 +56,10 @@ export default function Subscriptions() {
       // 提示即消失；若凭据仍无效（重登前还挂着旧凭据），下次检查报 auth-expired 会把它置回。
       const live = await api.mpSessionInfo().catch(() => null)
       setAuthExpired(s.authExpired && live?.loggedIn !== true)
-      setAccounts(s.accounts); setCheckLog(s.checkLog); setNextCheckAt(s.nextCheckAt)
+      // M63：检查日志与墨问共用通道（platform 区分）——公众号 tab 只看自己的记录
+      setAccounts(s.accounts)
+      setCheckLog(s.checkLog.filter((e) => e.platform !== 'mowen'))
+      setNextCheckAt(s.nextCheckAt)
       // 策略常驻可见：设置是几天前设的，点检查时早忘了——让状态可见，而不是让人回忆
       setPolicy((await api.getSettings()).subscriptionNewArticleAction)
     }
@@ -414,7 +417,7 @@ export default function Subscriptions() {
               <div>下载过某公众号的文章后它会出现在这里，或上方搜索名称直接添加。</div>
             </div>
           ) : (
-            <List dataSource={accounts} data-testid="subs-list" renderItem={(a) => {
+            <List dataSource={accounts} className="subs-row-list" data-testid="subs-list" renderItem={(a) => {
               const dl = dls[a.fakeid]
               const downloadingThis = dl != null && dl.phase !== 'done'
               // R1:每行「检查」单号;行内 busy 只看本行(checkingIds),不再牵动整页
