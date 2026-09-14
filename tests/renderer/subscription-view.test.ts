@@ -92,9 +92,9 @@ describe('formatShortTime', () => {
 })
 
 describe('itemStatusTag', () => {
-  it('四状态 → 标签 + 颜色', () => {
+  it('四状态 → 标签 + 颜色（exists 逐篇显示「已下载」绿色——用户心智「本地已有」，v0.11.0 安哥反馈）', () => {
     expect(itemStatusTag('downloaded')).toEqual({ label: '已下载', color: 'green' })
-    expect(itemStatusTag('exists')).toEqual({ label: '文库已有', color: 'default' })
+    expect(itemStatusTag('exists')).toEqual({ label: '已下载', color: 'green' })
     expect(itemStatusTag('failed')).toEqual({ label: '失败', color: 'red' })
     expect(itemStatusTag('unavailable')).toEqual({ label: '不可访问', color: 'orange' })
   })
