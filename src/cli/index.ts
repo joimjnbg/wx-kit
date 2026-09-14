@@ -782,14 +782,16 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
       const root = await resolveRoot(opts.out)
       const s = await settingsFor().get()
       const subs = new MowenSubscriptions(root)
-      const wechatSubs = new Subscriptions(root)   // 检查日志与微信共用同一通道（platform 字段区分）
       const logFilePath = join(userDataDir, 'subscriptions-check.log')
       const formats = parseFormats(s.defaultFormats.join(','))
       const result = await runMowenSubscriptionCheck('manual', {
         subs, runner: run,
         ...(opts.uid ? { uids: [String(opts.uid)] } : {}),
+        // 检查日志独立落 mowen-subscriptions.json（v0.11.0 设计修正，与 GUI 同源）；行日志共用
         log: async (e) => {
-          try { await wechatSubs.appendCheckLog(e); appendFileSync(logFilePath, formatCheckLogLine(e) + '\n') } catch { /* 留痕失败不阻断 */ }
+          try { await subs.appendCheckLog(e); appendFileSync(logFilePath, formatCheckLogLine(e) + '\n') } catch (err) {
+            process.stderr.write(`[mowen] check-log persist failed: ${err instanceof Error ? err.message : err}\n`)
+          }
           process.stderr.write(formatCheckLogLine(e) + '\n')
         },
         settings: { subscriptionNewArticleAction: s.subscriptionNewArticleAction, defaultFormats: s.defaultFormats },

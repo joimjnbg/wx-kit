@@ -100,7 +100,7 @@ export interface WxApi {
   subscriptionsOpenLog(): Promise<void>
   onSubscriptionsUpdated(cb: () => void): () => void
   // —— M63 墨问作者订阅 ——
-  mowenSubsList(): Promise<{ authors: MowenSubscribedAuthor[]; lastRunAt: number | null }>
+  mowenSubsList(): Promise<{ authors: MowenSubscribedAuthor[]; lastRunAt: number | null; checkLog?: CheckLogEntry[] }>
   mowenSubsAdd(keyword: string, uid?: string): Promise<{ ok: boolean; authors?: MowenUser[]; subscribed?: { uid: string; name: string; intro: string }; error?: { code: string; message: string } }>
   mowenSubsRemove(uid: string): Promise<void>
   mowenSubsSetSubscribed(uid: string, subscribed: boolean): Promise<void>

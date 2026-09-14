@@ -2,10 +2,10 @@
 // M63 T1：墨问订阅存储 + 水位/合并纯函数。fixture 来自 2026-09-13 真机 notes homepage
 // （见计划「真机锚点」：public_at 是 unix 秒数字；note_ids 非严格时间序）。
 import { describe, it, expect } from 'vitest'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MowenSubscriptions, diffNewNotes, mergeNewNotes, type MowenNoteRef } from '../../../src/core/mowen/subscription'
+import { MowenSubscriptions, migrateMowenCheckLog, diffNewNotes, mergeNewNotes, type MowenNoteRef } from '../../../src/core/mowen/subscription'
 import type { MowenNoteListItem } from '../../../src/core/mowen/types'
 
 const item = (over: Partial<MowenNoteListItem>): MowenNoteListItem => ({
@@ -92,5 +92,38 @@ describe('MowenSubscriptions', () => {
     await writeFile(join(root, 'mowen-subscriptions.json'), '{broken')
     const subs = new MowenSubscriptions(root)
     await expect(subs.list()).rejects.toThrow(/corrupt/)
+  })
+})
+
+describe('checkLog 独立存储 + 迁移（v0.11.0 设计修正）', () => {
+  it('appendCheckLog/getCheckLog 往返；同 time 条目幂等不重复', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mowen-log-'))
+    const subs = new MowenSubscriptions(root)
+    const e1 = { time: 1000, trigger: 'manual' as const, platform: 'mowen' as const, accounts: 1, newFound: 0, failed: 0 }
+    await subs.appendCheckLog(e1)
+    await subs.appendCheckLog(e1)   // 重复写同一条（迁移双跑场景）
+    expect(await subs.getCheckLog()).toHaveLength(1)
+  })
+
+  it('migrateMowenCheckLog：搬走微信文件里的 mowen 条目、保留微信条目；幂等可重跑', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mowen-mig-'))
+    const wechatPath = join(root, 'subscriptions.json')
+    const mowenEntry = { time: 900, trigger: 'auto' as const, platform: 'mowen' as const, accounts: 3, newFound: 2, failed: 0 }
+    const wechatEntry = { time: 800, trigger: 'auto' as const, accounts: 5, newFound: 1, failed: 0 }
+    await writeFile(wechatPath, JSON.stringify({ version: 1, accounts: [], checkLog: [mowenEntry, wechatEntry] }))
+    const mowen = new MowenSubscriptions(root)
+    expect(await migrateMowenCheckLog(wechatPath, mowen)).toBe(1)
+    // 微信文件只剩微信条目；墨问文件拿到自己的
+    const wechatAfter = JSON.parse(await readFile(wechatPath, 'utf8'))
+    expect(wechatAfter.checkLog).toEqual([wechatEntry])
+    expect(await mowen.getCheckLog()).toEqual([mowenEntry])
+    // 重跑：无新条目可搬，文件保持
+    expect(await migrateMowenCheckLog(wechatPath, mowen)).toBe(0)
+    expect(await mowen.getCheckLog()).toHaveLength(1)
+  })
+
+  it('migrateMowenCheckLog：微信文件不存在 → 返回 0 不炸', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mowen-mig2-'))
+    expect(await migrateMowenCheckLog(join(root, 'none.json'), new MowenSubscriptions(root))).toBe(0)
   })
 })
