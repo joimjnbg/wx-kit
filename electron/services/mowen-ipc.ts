@@ -1,7 +1,10 @@
 // electron/services/mowen-ipc.ts
 // 墨问作者订阅 IPC（M63）。独立注册器（对齐 mowen-detect.ts 模式），ipc.ts 一行调用。
 // 订阅决策抽成 subscribeAuthor（注入式，可单测）；handler 是一行委派。
-// 检查日志与微信共用同一通道（logCheck 由 ipc.ts 适配注入，platform:'mowen' 由编排写入）。
+// 检查日志独立落 mowen-subscriptions.json 自己的 checkLog（v0.11.0 设计修正：此前与微信共用
+// subscriptions.json——两平台调度结构性同时触发，共享写路径的并发窗口天生存在，且数据归属混乱）。
+// 行日志文件（subscriptions-check.log）仍共用：appendFileSync 行级追加是原子的，且条目自带
+// platform=mowen 前缀可读。
 import { ipcMain } from 'electron'
 import { MowenSubscriptions } from '../../src/core/mowen/subscription'
 import { runMowenSubscriptionCheck, type MowenCheckResult } from './mowen-subscription-check'
@@ -15,6 +18,7 @@ import { mowenRunnerOrNull } from './mowen-detect'
 import { mergeCheckDetailItems } from '../../src/core/subscription-batch'
 import type { MocliRunner, MowenUser } from '../../src/core/mowen/types'
 import type { CheckLogEntry, DownloadItemLog } from '../../src/core/subscriptions'
+import { formatCheckLogLine } from '../../src/core/subscriptions'
 import type { DownloadFormat, DownloadItemResult } from '../../src/core/types'
 import type { SettingsService } from './settings'
 
@@ -43,10 +47,8 @@ export async function subscribeAuthor(
 
 export interface MowenSubsIpcDeps {
   settings: SettingsService
-  /** 与微信共用的检查日志通道（ipc.ts 适配：写 subscriptions.json 的 checkLog + 行日志文件） */
-  logCheck: (entry: CheckLogEntry) => Promise<void>
-  /** 就地更新最近一条检查明细（共用微信 subscriptions.json 的 checkLog；M58 同规） */
-  mutateLatestCheckDetail: (uid: string, fn: (items: DownloadItemLog[]) => DownloadItemLog[]) => Promise<boolean>
+  /** 行日志文件追加（人类可读日志仍共用一个文件；JSON 检查日志已独立） */
+  appendLineLog: (line: string) => void
   /** 单篇下载（ipc.ts 组装完整 downloadMowenNote 通道：library 判重/图片本地化/offscreen PDF） */
   downloadNote: (noteId: string, formats: DownloadFormat[]) => Promise<DownloadItemResult>
   broadcast: (channel: string) => void
@@ -54,13 +56,18 @@ export interface MowenSubsIpcDeps {
 
 export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
   const subsOf = async () => new MowenSubscriptions((await deps.settings.get()).libraryRoot)
+  // 墨问检查日志：写自己的文件 + 行日志（平台并发窗口已因分文件消除）
+  const logCheck = async (entry: CheckLogEntry) => {
+    await (await subsOf()).appendCheckLog(entry)
+    deps.appendLineLog(formatCheckLogLine(entry) + '\n')
+  }
   const formatsOf = async () => (await deps.settings.get()).defaultFormats
   const broadcastUpdated = () => deps.broadcast('mowen-subs:updated')
   const checkNow = async (uids?: string[]): Promise<MowenCheckResult> => {
     const [subs, runner, settings] = await Promise.all([subsOf(), mowenRunnerOrNull(), deps.settings.get()])
     const result = await runMowenSubscriptionCheck('manual', {
       subs, runner,
-      log: deps.logCheck,
+      log: logCheck,
       settings: { subscriptionNewArticleAction: settings.subscriptionNewArticleAction, defaultFormats: settings.defaultFormats },
       downloadNote: (noteId) => deps.downloadNote(noteId, settings.defaultFormats),
       ...(uids?.length ? { uids } : {}),
@@ -71,7 +78,7 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
 
   ipcMain.handle('mowen-subs:list', async () => {
     const subs = await subsOf()
-    return { authors: await subs.list(), lastRunAt: await subs.getLastRunAt() }
+    return { authors: await subs.list(), lastRunAt: await subs.getLastRunAt(), checkLog: await subs.getCheckLog() }
   })
 
   ipcMain.handle('mowen-subs:add', async (_e, keyword: string, uid?: string) => {
@@ -117,11 +124,12 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
       }
     }
     // M58 同规：把本次结果回填进「本轮检查明细」——行内 pending 就地变为结果态（已下载/文库已有）
-    await deps.mutateLatestCheckDetail(uid, (cur) => mergeCheckDetailItems(cur, resultItems))
+    // 明细与补下载日志都落墨问自己的 checkLog（分文件后与本 IPC 同文件，进程内锁覆盖）
+    await subs.mutateLatestCheckDetail(uid, (cur) => mergeCheckDetailItems(cur, resultItems))
     // 落一条「补下载」日志（v0.11.0 安哥实测反馈：订阅页点下载走此 IPC，原来不写 logCheck，
     // 「库里有笔记但检查记录不见」无从追查）——对齐微信 subscriptions:downloadNew 的 kind='download' 行为。
     if (noteIds.length) {
-      await deps.logCheck({
+      await logCheck({
         time: Date.now(), trigger: 'manual', kind: 'download', platform: 'mowen',
         accounts: 1, newFound: 0, failed,
         downloaded, existed, downloadDetail: [{ fakeid: uid, nickname: (await (await subsOf()).list()).find((a) => a.uid === uid)?.name ?? uid, items: resultItems }],

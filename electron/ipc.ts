@@ -30,7 +30,7 @@ import { UpdateScheduler } from './services/update-scheduler'
 import { registerMowenIpc, mowenRunnerOrNull } from './services/mowen-detect'
 import { registerMowenSubscriptionIpc } from './services/mowen-ipc'
 import { downloadMowenNote } from '../src/core/mowen/download-mowen-note'
-import { MowenSubscriptions } from '../src/core/mowen/subscription'
+import { MowenSubscriptions, migrateMowenCheckLog } from '../src/core/mowen/subscription'
 import { runMowenSubscriptionCheck } from './services/mowen-subscription-check'
 import { SettingsService } from './services/settings'
 import { runSubscriptionCheck as svcRunSubscriptionCheck } from './services/subscription-check'
@@ -386,15 +386,36 @@ export function registerIpc(settings: SettingsService): void {
     })
     return result
   }
+  // —— M63 设计修正（2026-09-15 安哥质询后）：墨问检查日志独立落 mowen-subscriptions.json，
+  // 不再写微信 subscriptions.json 的 checkLog——两平台调度结构性同时触发（共用设置+同 slot+
+  // 同抖动种子），共享写路径的并发窗口是设计缺陷；分文件后窗口消失、数据归属清晰。
+  // 人类可读的行日志文件仍共用（行级 append 原子），条目带 platform=mowen 可辨。
+  // 启动时一次性迁移：旧版写进微信文件的历史墨问条目搬回自己的文件（幂等）。
+  const mowenLineLog = (line: string) => { try { appendFileSync(logPath, line) } catch { /* 行日志失败不阻断 */ } }
+  const mowenLogCheck = async (entry: CheckLogEntry) => {
+    const s = await settings.get()
+    try {
+      await new MowenSubscriptions(s.libraryRoot).appendCheckLog(entry)
+      mowenLineLog(formatCheckLogLine(entry) + '\n')
+    } catch (e) {
+      console.warn('[mowen-subscriptions] check-log persist failed:', e instanceof Error ? e.message : e)
+    }
+  }
   registerMowenSubscriptionIpc({
     settings,
-    logCheck: async (entry) => logCheck(await subsFor(), entry),
-    mutateLatestCheckDetail: async (uid, fn) => (await subsFor()).mutateLatestCheckDetail(uid, fn),
+    appendLineLog: mowenLineLog,
     downloadNote: mowenDownloadNote,
     broadcast: (channel) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(channel)
     },
   })
+  {
+    const migrate = (async () => {
+      const s = await settings.get()
+      await migrateMowenCheckLog(join(s.libraryRoot, 'subscriptions.json'), new MowenSubscriptions(s.libraryRoot))
+    })()
+    migrate.catch((e) => console.warn('[mowen-subscriptions] check-log migrate failed:', e instanceof Error ? e.message : e))
+  }
   // 调度与微信共用设置键（PRD R4 拍板），但 scheduler 实例独立——canRun 各自闸门：
   // 微信未登录(mpGateway 非 active)只跳过微信 tick，墨问只看 mocli 装没装，两平台互不阻塞。
   new SubscriptionScheduler({
@@ -407,7 +428,7 @@ export function registerIpc(settings: SettingsService): void {
       return runMowenSubscriptionCheck('auto', {
         subs: new MowenSubscriptions(s.libraryRoot),
         runner,
-        log: async (entry) => logCheck(await subsFor(), entry),
+        log: mowenLogCheck,
         settings: { subscriptionNewArticleAction: s.subscriptionNewArticleAction, defaultFormats: s.defaultFormats },
         downloadNote: (noteId) => mowenDownloadNote(noteId, s.defaultFormats),
       })

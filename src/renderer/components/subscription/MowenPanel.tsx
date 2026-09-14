@@ -40,9 +40,9 @@ export default function MowenPanel() {
 
   const load = async () => {
     try {
-      const [s, log] = await Promise.all([api.mowenSubsList(), api.subscriptionsList()])
+      const s = await api.mowenSubsList()
       setAuthors(s.authors)
-      setCheckLog((log.checkLog ?? []).filter((e) => e.platform === 'mowen'))
+      setCheckLog(s.checkLog ?? [])   // 墨问自己的检查日志（独立文件，不再从微信列表过滤）
     } catch (e) {
       message.error('加载订阅失败：' + (e as Error).message)
     } finally { setLoading(false) }
