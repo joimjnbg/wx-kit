@@ -348,6 +348,8 @@ body {
 }
 /* 警示态（M40）：未识别类型、解析告警——弱化但要能一眼分辨出「这篇不太对」 */
 .kind-tag.warn { border-color: var(--cinnabar); color: var(--cinnabar); }
+/* 信息态（v0.11.0）：非故障的功能提示（如「含引用子笔记」）——不该用警告色吓用户 */
+.kind-tag.info { border-color: var(--celadon, #3f8f6f); color: var(--celadon, #3f8f6f); }
 .card-actions {
   display: flex;
   gap: 4px;
