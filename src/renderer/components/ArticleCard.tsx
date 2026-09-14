@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Dropdown, Modal, Popconfirm, Button, message } from 'antd'
+import { Dropdown, Modal, Popconfirm, Button, Spin, Tag, message } from 'antd'
 import type { ArticleMeta } from '../../core/types'
 import { api } from '../api'
 import { toWxfileBase, wxfileJoin } from '../wxfile'
@@ -36,6 +36,20 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
   const allWarnings = meta.warnings ?? []
   const infoWarnings = allWarnings.filter((w) => w.includes('引用子笔记'))
   const realWarnings = allWarnings.filter((w) => !w.includes('引用子笔记'))
+  // 引用子笔记清单：弹窗打开时按需拉真实标题与库内状态（点开才花请求）
+  const [refNotes, setRefNotes] = useState<{ noteId: string; title: string; available: boolean; inLibrary: boolean }[] | null>(null)
+  const [refLoading, setRefLoading] = useState(false)
+  const reloadRefNotes = () => {
+    setRefLoading(true)
+    api.mowenRefNotes(meta.sourceUrl)
+      .then((r) => setRefNotes(r.ok ? (r.notes ?? []) : []))
+      .catch(() => setRefNotes([]))
+      .finally(() => setRefLoading(false))
+  }
+  const openNotice = () => {
+    setNoticeOpen(true)
+    if (infoWarnings.length && refNotes == null) reloadRefNotes()
+  }
 
   useEffect(() => {
     let alive = true
@@ -56,6 +70,7 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
         // 本体已在文库（判重 skip），只补引用的子笔记
         await api.download([meta.sourceUrl], formats, { expandRefs: true })
         message.success('已提交下载引用的子笔记，完成后可在文库查看')
+        reloadRefNotes()   // 就地刷新库内状态：刚下的子笔记立即变「已在文库」
       } else {
         await api.libraryRemove(meta.id)
         await api.download([meta.sourceUrl], formats)
@@ -119,7 +134,7 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
               className={`kind-tag ${realWarnings.length ? 'warn' : 'info'}`}
               style={{ cursor: 'pointer' }}
               title="点击查看详情与可执行操作"
-              onClick={(e) => { e.stopPropagation(); setNoticeOpen(true) }}>
+              onClick={(e) => { e.stopPropagation(); openNotice() }}>
               {realWarnings.length ? '⚠ ' : 'ℹ '}
             </span>
           ) : null}
@@ -139,8 +154,27 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
       </div>
     </div>
     </Dropdown>
-    {/* 提示/告警行动弹窗：全文 + 下一步动作（v0.11.0 安哥反馈「列出来用户又能怎样」） */}
+    {/* 提示/告警行动弹窗：引用笔记列真实标题与库内状态；告警给原文核对/重下动作
+        （v0.11.0 安哥反馈：给用户看的应该是「引用了哪几篇、下了没有」，不是内部文案） */}
     <Modal open={noticeOpen} onCancel={() => setNoticeOpen(false)} title={meta.title.slice(0, 30)} footer={null} width={520}>
+      {infoWarnings.length > 0 && (
+        <div style={{ marginBottom: 16 }} data-testid="card-notice-infos">
+          <h4 style={{ fontSize: 13, margin: '0 0 8px' }}>这篇笔记引用了 {refNotes?.length ?? '…'} 篇笔记</h4>
+          {refLoading ? <Spin size="small" />
+            : (refNotes?.length ?? 0) === 0 ? <span className="faint" style={{ fontSize: 13 }}>暂无引用信息，可重新下载本篇后查看。</span>
+              : (
+                <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
+                  {refNotes!.map((n) => (
+                    <li key={n.noteId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                      <a style={{ flex: 1, fontSize: 13 }} onClick={() => api.openExternal(`https://note.mowen.cn/detail/${n.noteId}`)}
+                        title="在浏览器打开">{n.title}</a>
+                      <Tag color={n.inLibrary ? 'green' : 'orange'}>{n.inLibrary ? '已在文库' : '未下载'}</Tag>
+                    </li>
+                  ))}
+                </ul>
+              )}
+        </div>
+      )}
       {realWarnings.length > 0 && (
         <div style={{ marginBottom: 16 }} data-testid="card-notice-warnings">
           <h4 style={{ fontSize: 13, margin: '0 0 6px', color: 'var(--cinnabar)' }}>下载告警</h4>
@@ -149,19 +183,11 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
           </ul>
         </div>
       )}
-      {infoWarnings.length > 0 && (
-        <div style={{ marginBottom: 16 }} data-testid="card-notice-infos">
-          <h4 style={{ fontSize: 13, margin: '0 0 6px', color: 'var(--celadon, #3f8f6f)' }}>关联内容</h4>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-            {infoWarnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
-        </div>
-      )}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        {infoWarnings.length > 0 && (
+        {infoWarnings.length > 0 && (refNotes?.some((n) => n.available && !n.inLibrary) ?? false) && (
           <Button type="primary" loading={acting === 'expand'} disabled={!!acting && acting !== 'expand'}
             onClick={() => runAction('expand')} data-testid="card-notice-expand">
-            下载引用的子笔记
+            下载未入库的引用笔记
           </Button>
         )}
         {realWarnings.length > 0 && (
