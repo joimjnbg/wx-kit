@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 ![Electron](https://img.shields.io/badge/Electron-42-9feaf9.svg)
 ![Node](https://img.shields.io/badge/Node-20%2B-339933.svg)
-![Status](https://img.shields.io/badge/v0.10.6-released-success.svg)
+![Status](https://img.shields.io/badge/v0.11.0-released-success.svg)
 
 ## 这是什么
 
@@ -17,17 +17,20 @@ wx-kit 是一个本地优先的微信公众号文章下载器：
 - 可把文库文章同步为 Astro 站点内容；
 - GUI 适合日常使用，CLI 输出纯 JSON，适合 AI agent 和脚本调用。
 
-> **当前能力边界（v0.10.6）**
+> **当前能力边界（v0.11.0）**
 >
-> v0.10.6 让每一轮订阅检查「看得见、能落地」：行内展开即见**本轮检查的文章清单与状态**（未下载/已下载/失败等），未下载的可**单篇下载**并就地看结果，已下载的**点标题直开阅读器**。v0.10.3–v0.10.5 的改进全部保留——登录态失效如实报「需重新登录」且重登后提示即消；文库按公众号筛选覆盖全部文章；CLI 快捷入口不指向临时产物；订阅页「识别」全程有反馈：
+> v0.11.0 把文库内容源从「只下微信文章」扩到「**微信 + 墨问**」，并让单篇路径更顺手：
 >
-> - 识别公众号用「粘贴该号**任意一篇文章链接**」——微信读书无按名字搜索接口；
-> - **降级项**：微信读书列表接口被服务端按账号限制，每次仅返回该号**最新一篇**文章；「按公众号批量下载」入口已移除（CLI `crawl` 稳定拒绝），自动订阅与日报无法找回两次刷新间被覆盖的文章；
-> - 按文章 URL 下载不依赖登录态，仍是主功能，未受影响；阅读器内点外链统一用系统浏览器打开。
+> - **墨问笔记下载**：下载页新增「墨问笔记」tab——按用户名搜索作者（候选带简介）→ 条件拉清单 → 勾选批量下载；URL 输入框同时识别墨问笔记地址；合集引用默认渲染引用块，勾选「展开引用子笔记」递归下载；
+> - **墨问作者订阅**：订阅页新增「墨问作者」tab——搜索作者订阅，定时检查新笔记（与公众号订阅共用频率与自动下载设置），行内清单可见可挑，检查记录独立留痕；
+> - **CLI 对等**：`wx-kit mowen import / detect / search-user / list-user / list-mine / search / subscribe / unsubscribe / list / check-now`；
+> - 文库卡片右键可**复制文章保存路径**；贴图类微信文章自动走浏览器渲染兜底提取正文与图片；
+> - **依赖说明**：墨问发现与订阅检查走 mocli（`npm install -g @mowenxd/cli` 并 `mocli auth init`），未安装时墨问入口显示安装指引，不影响微信功能；
+> - **降级项（微信侧，与 v0.10.6 一致）**：微信读书列表接口仍被服务端按账号限制，订阅每次仅返回该号最新一篇；「按公众号批量下载」入口保持移除。
 
 ## 当前界面
 
-以下截图来自 v0.10.6 正式界面，并由同一篇真实公众号文章完成下载、入库和阅读后生成。
+以下截图来自 v0.11.0 界面（主体页面；v0.11.0 新增了下载页「墨问笔记」tab 与订阅页平台切换）。
 
 | URL 下载与历史 | 本地文库 |
 |---|---|
@@ -80,11 +83,11 @@ wx-kit --version
 
 ### 下载安装包
 
-前往 [GitHub Releases](../../releases) 下载最新已发布版本 v0.10.6：
+前往 [GitHub Releases](../../releases) 下载最新已发布版本 v0.11.0：
 
-- Apple Silicon：`wx-kit-0.10.6-arm64.dmg`
-- Intel Mac：`wx-kit-0.10.6.dmg`
-- Windows：`wx-kit.Setup.0.10.6.exe`
+- Apple Silicon：`wx-kit-0.11.0-arm64.dmg`
+- Intel Mac：`wx-kit-0.11.0.dmg`
+- Windows：`wx-kit.Setup.0.11.0.exe`
 
 当前安装包未签名、未公证。macOS 首次打开时需在“系统设置 → 隐私与安全性”中允许，或执行上面的 `xattr -cr`；Windows 遇到 SmartScreen 时选择“更多信息 → 仍要运行”。
 
@@ -115,6 +118,16 @@ wx-kit --version
 | 检查订阅更新 | `wx-kit subscription check-now [--accounts a,b]` |
 | 查自动下载了什么（M56） | `wx-kit subscription list`（输出 `recentLog` 含逐篇明细） |
 | 按发表日期查本地订阅文章（M55） | `wx-kit subscription digest --date <日期>` |
+
+墨问笔记相关命令（v0.11.0 起，需 [mocli](https://github.com/mowenxd/cli) 认证）：
+
+| 目标 | 命令 |
+|---|---|
+| 下载笔记（单篇/按作者批量） | `wx-kit mowen import <note-id\|URL> [--expand-refs]` / `wx-kit mowen import --uid <uid>` |
+| 搜索/订阅墨问作者 | `wx-kit mowen subscribe --keyword <名字>`（先看候选）→ 带 `--uid` 确认 |
+| 检查墨问订阅更新 | `wx-kit mowen check-now [--uid <uid>]` |
+| 查墨问订阅列表 | `wx-kit mowen list` |
+| 搜用户/列清单/搜笔记 | `wx-kit mowen search-user / list-user / list-mine / search` |
 | 刷新下载后查今天（M55） | `wx-kit subscription digest --date today --download` |
 | 登录态迁移 | `wx-kit session export/import` |
 | 请求保护 | `wx-kit protection status/pause/resume` |
@@ -193,7 +206,7 @@ npm run build
 
 ## 项目状态
 
-- 最新已发布版本：v0.10.6；GitHub Release 与 brew tap 已上线（npm `@simiam/wx-kit` 仍按可选渠道规约维护）；
+- 最新已发布版本：v0.11.0；GitHub Release 与 brew tap 已上线（npm `@simiam/wx-kit` 仍按可选渠道规约维护）；
 - 下一版候选与完整发布史统一维护在 [`ROADMAP.md`](ROADMAP.md)，README 不再复制一份容易漂移的版本史。
 
 需求、设计与开发约定分别见 [`docs/`](docs/)、[`ROADMAP.md`](ROADMAP.md) 和 [`AGENTS.md`](AGENTS.md)。
