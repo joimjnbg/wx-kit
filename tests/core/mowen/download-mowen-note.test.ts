@@ -127,6 +127,24 @@ describe('downloadMowenNote', () => {
     expect(r.refResults?.unavailable).toContain('paidChildNoteUuid12345678')
   })
 
+  it('父笔记已在库 + expandRefs：本体判重跳过，子笔记仍要补下（卡片「补下引用」场景，v0.11.0）', async () => {
+    const notes = new Map<string, NoteShowResult>([
+      ['parentNoteUuid1234567890', noteShowOf({ uuid: 'parentNoteUuid1234567890', title: '父', refNoteIds: ['childNoteUuid123456789012'] })],
+      ['childNoteUuid123456789012', noteShowOf({ uuid: 'childNoteUuid123456789012', title: '子' })],
+    ])
+    const deps = makeDeps(root, notes, { expandRefs: true })
+    // 先不带 expandRefs 下载父（模拟「之前只下了本体」）
+    await downloadMowenNote('parentNoteUuid1234567890', ['meta'], { ...deps, expandRefs: false })
+    expect(await deps.library.has('mowen_parentNoteUuid1234567890')).toBe(true)
+    expect(await deps.library.has('mowen_childNoteUuid123456789012')).toBe(false)
+    // 带 expandRefs 重下：父判重 skip，但引用展开必须照走——
+    // 此前提前 return 让展开永远不生效（卡片「下载未入库的引用笔记」点了没反应的根因）
+    const r = await downloadMowenNote('parentNoteUuid1234567890', ['meta'], deps)
+    expect(r.skipped).toBe(true)
+    expect(await deps.library.has('mowen_childNoteUuid123456789012')).toBe(true)
+    expect(r.refResults?.total).toBe(1)
+  })
+
   it('深度上限 3：链式第 4 层不再展开，warning 提示', async () => {
     const notes = new Map<string, NoteShowResult>()
     const chain = ['l1aaaaaaaaaaaaaaaaaaaa', 'l2aaaaaaaaaaaaaaaaaaaa', 'l3aaaaaaaaaaaaaaaaaaaa', 'l4aaaaaaaaaaaaaaaaaaaa']
