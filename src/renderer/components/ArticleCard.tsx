@@ -81,9 +81,20 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
               title={tag.warn ? `未识别的消息类型 ${meta.itemShowType}，正文是兜底提取的，建议核对` : undefined}>{tag.text} </span>
           )}
           {/* 「下到了但可能不对」的唯一信号：不显眼，但必须找得到（M40 起写进 meta.json） */}
-          {meta.warnings?.length ? (
-            <span data-testid="card-warnings" className="kind-tag warn" title={meta.warnings.join('\n')}>⚠ </span>
-          ) : null}
+          {/* warnings 分级（v0.11.0）：引用子笔记提示是「还有关联内容可选下」，不是故障——
+              用 ℹ 信息态；真正的解析/下载告警保留 ⚠ 警示态。 */}
+          {(() => {
+            const all = meta.warnings ?? []
+            if (!all.length) return null
+            const info = all.filter((w) => w.includes('引用子笔记'))
+            const warn = all.filter((w) => !w.includes('引用子笔记'))
+            return (
+              <>
+                {warn.length ? <span data-testid="card-warnings" className="kind-tag warn" title={warn.join('\n')}>⚠ </span> : null}
+                {info.length ? <span data-testid="card-infos" className="kind-tag info" title={info.join('\n')}>ℹ </span> : null}
+              </>
+            )
+          })()}
           {meta.account || '未知公众号'}
           {meta.publishTime ? ` · ${relativeTime(meta.publishTime)}` : ''}
         </div>
