@@ -75,11 +75,13 @@ export function formatShortTime(ms: number): string {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** 下载明细弹窗里的状态 Tag：五状态五色；failed 的 title（tooltip）带 error 由调用方透传。 */
+/** 下载明细弹窗里的状态 Tag：五状态五色；failed 的 title（tooltip）带 error 由调用方透传。
+ *  exists 逐篇显示「已下载」（绿色）：面向「这篇我本地有没有」的用户心智（v0.11.0 安哥实测
+ *  反馈「文库已有」制造两 tab 观感分裂）；「本轮没有新下载」的区分由行内摘要计数保留。 */
 export function itemStatusTag(status: DownloadItemLog['status']): { label: string; color: string } {
   switch (status) {
     case 'downloaded': return { label: '已下载', color: 'green' }
-    case 'exists': return { label: '文库已有', color: 'default' }
+    case 'exists': return { label: '已下载', color: 'green' }
     case 'failed': return { label: '失败', color: 'red' }
     case 'unavailable': return { label: '不可访问', color: 'orange' }
     case 'pending': return { label: '未下载', color: 'default' }
