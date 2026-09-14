@@ -360,7 +360,11 @@ export function registerIpc(settings: SettingsService): void {
   const logPath = join(app.getPath('userData'), 'subscriptions-check.log')
   const logCheck = async (subs: Subscriptions, entry: CheckLogEntry) => {
     try { await subs.appendCheckLog(entry); appendFileSync(logPath, formatCheckLogLine(entry) + '\n') }
-    catch { /* 留痕失败不阻断检查主流程 */ }
+    catch (e) {
+      // 留痕失败不阻断检查主流程，但不能再完全静默——「检查跑了、记录没了」
+      // 无法与「检查没跑」区分（2026-09-14 安哥实测：下载/水位都推进了，检查记录却缺失）。
+      console.warn('[subscriptions] check-log persist failed:', e instanceof Error ? e.message : e)
+    }
   }
 
   // —— M63 墨问作者订阅：检查日志与微信共用同一通道（checkLog 数组 + 行日志），platform 区分 ——
