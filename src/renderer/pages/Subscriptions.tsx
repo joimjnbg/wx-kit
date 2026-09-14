@@ -327,10 +327,13 @@ export default function Subscriptions() {
       )
     }
     if (e.downloadDetail?.length) {
-      sections.push(
+      // 只呈现有新文章/新笔记的账号（v0.11.0 安哥反馈）：「查过无新」的空条目是检查完整性的
+      // 内部表达，对看弹窗的用户是噪音；全空时走下方兜底文案。
+      const withNew = e.downloadDetail.filter((acc) => acc.items.length > 0)
+      if (withNew.length) sections.push(
         <div key="downloads" data-testid="subs-detail-downloads">
           <h4 style={{ fontSize: 13, margin: '0 0 8px' }}>下载明细</h4>
-          {e.downloadDetail.map((acc) => (
+          {withNew.map((acc) => (
             <div key={acc.fakeid} style={{ marginBottom: 12 }} data-testid="subs-detail-account">
               <div style={{ fontWeight: 600, fontSize: 13 }}>{acc.nickname}</div>
               {acc.items.map((item, i) => {
@@ -351,7 +354,12 @@ export default function Subscriptions() {
     Modal.info({
       title: detailModalTitle(e),
       content: sections.length ? <>{sections}</> : (
-        <span className="faint" style={{ fontSize: 13 }}>该记录没有留下更多明细（旧版本记录）。</span>
+        // 明细全空（本次检查所有账号均无新内容）或旧版本记录——两种情况都说人话
+        <span className="faint" style={{ fontSize: 13 }}>
+          {e.accounts > 0 && e.newFound === 0 && !e.failures?.length
+            ? `本次检查 ${e.accounts} 个账号，均无新内容。`
+            : '该记录没有留下更多明细（旧版本记录）。'}
+        </span>
       ),
       okText: '知道了',
       width: 520,

@@ -271,10 +271,12 @@ export default function MowenPanel() {
       )
     }
     if (e.downloadDetail?.length) {
-      sections.push(
+      // 只呈现有新笔记的作者（与微信弹窗同规）：「查过无新」的空条目不渲染
+      const withNew = e.downloadDetail.filter((acc) => acc.items.length > 0)
+      if (withNew.length) sections.push(
         <div key="downloads" data-testid="mowen-subs-detail-downloads">
           <h4 style={{ fontSize: 13, margin: '0 0 8px' }}>下载明细</h4>
-          {e.downloadDetail.map((acc) => (
+          {withNew.map((acc) => (
             <div key={acc.fakeid} style={{ marginBottom: 12 }} data-testid="mowen-subs-detail-author">
               <div style={{ fontWeight: 600, fontSize: 13 }}>{acc.nickname}</div>
               {acc.items.map((item, i) => {
@@ -293,7 +295,13 @@ export default function MowenPanel() {
     }
     Modal.info({
       title: detailModalTitle(e),
-      content: sections.length ? <>{sections}</> : <span className="faint" style={{ fontSize: 13 }}>该记录没有留下更多明细（旧版本记录）。</span>,
+      content: sections.length ? <>{sections}</> : (
+        <span className="faint" style={{ fontSize: 13 }}>
+          {e.accounts > 0 && e.newFound === 0 && !e.failures?.length
+            ? `本次检查 ${e.accounts} 位作者，均无新笔记。`
+            : '该记录没有留下更多明细（旧版本记录）。'}
+        </span>
+      ),
       okText: '知道了', width: 520,
     })
   }
