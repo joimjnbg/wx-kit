@@ -108,6 +108,8 @@ export interface WxApi {
   mowenSubsDownloadNotes(uid: string, noteIds: string[]): Promise<{ downloaded: number; existed: number; failed: number }>
   mowenSubsDismissNotes(uid: string, noteIds: string[]): Promise<void>
   onMowenSubsUpdated(cb: () => void): () => void
+  /** 卡片行动弹窗：按需拉取引用子笔记的标题与库内状态（用户点开才发请求） */
+  mowenRefNotes(sourceUrl: string): Promise<{ ok: boolean; notes?: { noteId: string; title: string; available: boolean; inLibrary: boolean }[]; error?: { code: string; message: string } }>
   onSubscriptionDownloadProgress(cb: (e: SubscriptionDownloadProgress) => void): () => void
   // —— M18 命令行软链 ——
   /**

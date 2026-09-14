@@ -72,6 +72,7 @@ const api: WxApi = {
   mowenSubsCheckNow: (uids) => ipcRenderer.invoke('mowen-subs:checkNow', uids),
   mowenSubsDownloadNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:downloadNotes', uid, noteIds),
   mowenSubsDismissNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:dismissNotes', uid, noteIds),
+  mowenRefNotes: (sourceUrl) => ipcRenderer.invoke('mowen:refNotes', sourceUrl),
   onMowenSubsUpdated: (cb) => {
     const listener = () => cb()
     ipcRenderer.on('mowen-subs:updated', listener)

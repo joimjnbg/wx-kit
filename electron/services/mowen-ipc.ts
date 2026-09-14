@@ -6,6 +6,11 @@ import { ipcMain } from 'electron'
 import { MowenSubscriptions } from '../../src/core/mowen/subscription'
 import { runMowenSubscriptionCheck, type MowenCheckResult } from './mowen-subscription-check'
 import { searchUsers } from '../../src/core/mowen/metadata'
+import { fetchNoteShow } from '../../src/core/mowen/note-show'
+import { defaultFetchJson } from '../../src/core/mowen/download-mowen-note'
+import { extractMowenNoteId } from '../../src/core/mowen/url'
+import { MowenNoteUnavailable } from '../../src/core/mowen/errors'
+import { Library } from '../../src/core/library'
 import { mowenRunnerOrNull } from './mowen-detect'
 import { mergeCheckDetailItems } from '../../src/core/subscription-batch'
 import type { MocliRunner, MowenUser } from '../../src/core/mowen/types'
@@ -120,5 +125,32 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
   ipcMain.handle('mowen-subs:dismissNotes', async (_e, uid: string, noteIds: string[]) => {
     await (await subsOf()).setNoteStatus(uid, noteIds, 'ignored')
     broadcastUpdated()
+  })
+
+  // 卡片行动弹窗的数据源（v0.11.0 安哥反馈：只给 warning 原文用户看不懂）——
+  // 按需 note/show 拉引用子笔记的真实标题与库内状态，用户点开弹窗才花这些请求。
+  ipcMain.handle('mowen:refNotes', async (_e, sourceUrl: string) => {
+    const uuid = extractMowenNoteId(sourceUrl ?? '')
+    if (!uuid) return { ok: false, error: { code: 'NOT_MOWEN', message: '不是墨问笔记' } }
+    const library = new Library((await deps.settings.get()).libraryRoot)
+    try {
+      const show = await fetchNoteShow(uuid, { fetchJson: defaultFetchJson })
+      const notes = []
+      for (const childUuid of show.refNoteIds) {
+        let title = '(无法获取标题)'
+        let available = true
+        try {
+          title = (await fetchNoteShow(childUuid, { fetchJson: defaultFetchJson })).title || title
+        } catch (e) {
+          if (e instanceof MowenNoteUnavailable) { title = '（付费/私密笔记，不可获取）'; available = false }
+          else throw e
+        }
+        notes.push({ noteId: childUuid, title, available, inLibrary: await library.has(`mowen_${childUuid}`) })
+      }
+      return { ok: true, notes }
+    } catch (e) {
+      if (e instanceof MowenNoteUnavailable) return { ok: false, error: { code: 'UNAVAILABLE', message: '该笔记不可匿名获取（付费/私密）' } }
+      return { ok: false, error: { code: 'FETCH_FAILED', message: (e as Error).message } }
+    }
   })
 }
