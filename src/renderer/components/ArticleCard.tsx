@@ -61,20 +61,25 @@ export default function ArticleCard({ meta, libraryRoot, index, selected, onTogg
     return () => { alive = false }
   }, [meta.dir, meta.formats, libraryRoot])
 
-  // 行动：就地把提示/告警变成可执行的下一步（v0.11.0 安哥反馈「列出来用户又能怎样」）
+  // 行动：就地把提示/告警变成可执行的下一步（v0.11.0 安哥反馈「列出来用户又能怎样」）。
+  // api.download 等队列跑完才返回——返回即下载已结束，提示说结果，不说「已提交」。
   const runAction = async (kind: 'expand' | 'redownload') => {
     setActing(kind)
     try {
       const formats = (await api.getSettings()).defaultFormats
       if (kind === 'expand') {
         // 本体已在文库（判重 skip），只补引用的子笔记
-        await api.download([meta.sourceUrl], formats, { expandRefs: true })
-        message.success('已提交下载引用的子笔记，完成后可在文库查看')
+        const s = await api.download([meta.sourceUrl], formats, { expandRefs: true })
+        if (s.succeeded > 0) message.success(`引用笔记已下载 ${s.succeeded} 篇`)
+        else if (s.failed > 0) message.warning('引用笔记下载失败，可稍后重试')
+        else message.info('引用笔记均已在文库中')
         reloadRefNotes()   // 就地刷新库内状态：刚下的子笔记立即变「已在文库」
       } else {
         await api.libraryRemove(meta.id)
-        await api.download([meta.sourceUrl], formats)
-        message.success('已删除旧内容并重新提交下载')
+        const s = await api.download([meta.sourceUrl], formats)
+        if (s.succeeded > 0) message.success('已删除旧内容并重新下载完成')
+        else if (s.failed > 0) message.warning('重新下载失败，可稍后重试')
+        else message.info('内容无变化')
       }
       setNoticeOpen(false)
       onChanged?.()
