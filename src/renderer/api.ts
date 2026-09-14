@@ -14,6 +14,8 @@ import type { MpProtectionStatus } from '../../electron/services/mp-request-gate
 export type { HistoryEvent } from '../core/download-history'
 export type { SubscribedAccount, CheckLogEntry } from '../core/subscriptions'
 export type { RunCheckResult, PerAccountResult } from '../../electron/services/subscription-check'
+export type { MowenCheckResult } from '../../electron/services/mowen-subscription-check'
+import type { MowenCheckResult } from '../../electron/services/mowen-subscription-check'
 import type { MowenSubscribedAuthor, MowenNoteRef } from '../core/mowen/subscription'
 import type { MowenUser } from '../core/mowen/types'
 export type { MowenSubscribedAuthor, MowenNoteRef, MowenUser }
@@ -101,7 +103,8 @@ export interface WxApi {
   mowenSubsList(): Promise<{ authors: MowenSubscribedAuthor[]; lastRunAt: number | null }>
   mowenSubsAdd(keyword: string, uid?: string): Promise<{ ok: boolean; authors?: MowenUser[]; subscribed?: { uid: string; name: string; intro: string }; error?: { code: string; message: string } }>
   mowenSubsRemove(uid: string): Promise<void>
-  mowenSubsCheckNow(uids?: string[]): Promise<{ authors: number; newFound: number; failed: number; note?: string; results: { uid: string; name: string; ok: boolean; newFound: number; downloaded: number; existed: number; unavailable: number; error?: string; warn?: string }[] }>
+  mowenSubsSetSubscribed(uid: string, subscribed: boolean): Promise<void>
+  mowenSubsCheckNow(uids?: string[]): Promise<MowenCheckResult>
   mowenSubsDownloadNotes(uid: string, noteIds: string[]): Promise<{ downloaded: number; existed: number; failed: number }>
   mowenSubsDismissNotes(uid: string, noteIds: string[]): Promise<void>
   onMowenSubsUpdated(cb: () => void): () => void

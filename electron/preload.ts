@@ -68,6 +68,7 @@ const api: WxApi = {
   mowenSubsList: () => ipcRenderer.invoke('mowen-subs:list'),
   mowenSubsAdd: (keyword, uid) => ipcRenderer.invoke('mowen-subs:add', keyword, uid),
   mowenSubsRemove: (uid) => ipcRenderer.invoke('mowen-subs:remove', uid),
+  mowenSubsSetSubscribed: (uid, subscribed) => ipcRenderer.invoke('mowen-subs:setSubscribed', uid, subscribed),
   mowenSubsCheckNow: (uids) => ipcRenderer.invoke('mowen-subs:checkNow', uids),
   mowenSubsDownloadNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:downloadNotes', uid, noteIds),
   mowenSubsDismissNotes: (uid, noteIds) => ipcRenderer.invoke('mowen-subs:dismissNotes', uid, noteIds),

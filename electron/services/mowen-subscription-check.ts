@@ -8,7 +8,8 @@ import { MowenNoteUnavailable } from '../../src/core/mowen/errors'
 import type { MocliRunner } from '../../src/core/mowen/types'
 import type { MowenSubscriptions } from '../../src/core/mowen/subscription'
 import { diffNewNotes, mergeNewNotes } from '../../src/core/mowen/subscription'
-import type { CheckLogEntry, CheckFailure } from '../../src/core/subscriptions'
+import type { CheckLogEntry, CheckFailure, AccountDownloadLog, DownloadItemLog } from '../../src/core/subscriptions'
+import { countDownloadOutcomes } from '../../src/core/subscription-batch'
 import type { DownloadItemResult } from '../../src/core/types'
 import type { AppSettings } from './settings'
 
@@ -66,6 +67,7 @@ export async function runMowenSubscriptionCheck(trigger: 'auto' | 'manual', deps
   let newFound = 0, failed = 0
   const failures: CheckFailure[] = []
   const results: MowenPerAuthorResult[] = []
+  const downloadLogs: AccountDownloadLog[] = []
   // 平台级防重入时刻：与微信 lastRunAt 同思路，scheduler 据此跳过重复触发
   await deps.subs.setLastRunAt(now)
   for (const a of authors) {
@@ -82,18 +84,32 @@ export async function runMowenSubscriptionCheck(trigger: 'auto' | 'manual', deps
 
       let downloaded = 0, existed = 0, unavailable = 0
       const pending = merged.filter((n) => n.status === 'pending')
+      // 逐篇明细（M63 对齐微信 M56/M58）：download 策略落真实交付四态，notify 策略落 pending，
+      // 无新文章落空 items——GUI 行内「本轮检查文章列表」与检查记录弹窗同源消费。
+      // articleId 直接构造（mowen_<noteId> 主键确定性，点标题直开阅读器），不需要微信那套跨形态反查。
+      const logItems: DownloadItemLog[] = []
       if (deps.settings.subscriptionNewArticleAction === 'download' && pending.length) {
         for (const n of pending) {
           try {
             const r = await deps.downloadNote(n.noteId)
             if (r.skipped) existed++; else downloaded++
             await deps.subs.setNoteStatus(a.uid, [n.noteId], 'downloaded')
+            logItems.push({ title: n.title || '(无标题)', status: r.skipped ? 'exists' : 'downloaded', ...(r.id ? { articleId: r.id } : {}), url: n.url, refId: n.noteId })
           } catch (e) {
-            if (e instanceof MowenNoteUnavailable) unavailable++   // 付费/不可见：保持 pending，用户可挑可重试
-            else throw e
+            if (e instanceof MowenNoteUnavailable) {
+              // 付费/不可见：保持 pending（重试无用但不伪装成功），明细如实
+              unavailable++
+              logItems.push({ title: n.title || '(无标题)', status: 'unavailable', url: n.url, refId: n.noteId })
+            } else {
+              // 真故障：保持 pending 等重试，不中断本作者其余篇目（对齐微信「failed 留在待处理」）
+              logItems.push({ title: n.title || '(无标题)', status: 'failed', error: e instanceof Error ? e.message : String(e), url: n.url, refId: n.noteId })
+            }
           }
         }
+      } else {
+        for (const n of pending) logItems.push({ title: n.title || '(无标题)', status: 'pending' as const, url: n.url, refId: n.noteId })
       }
+      downloadLogs.push({ fakeid: a.uid, nickname: a.name, items: logItems })
       newFound += pending.length
       results.push({
         uid: a.uid, name: a.name, ok: true, newFound: pending.length, downloaded, existed, unavailable,
@@ -106,9 +122,15 @@ export async function runMowenSubscriptionCheck(trigger: 'auto' | 'manual', deps
       results.push({ uid: a.uid, name: a.name, ok: false, newFound: 0, downloaded: 0, existed: 0, unavailable: 0, error })
     }
   }
+  // 交付字段只在有下载动作时写（「没下载」和「下载了 0 篇」是两回事，微信同规）；
+  // downloadDetail 全号落条目（含空 items），供行内明细与弹窗消费。
+  const { downloaded: downloadedTotal, existed: existedTotal } = countDownloadOutcomes(downloadLogs)
+  const didDownload = downloadLogs.some((d) => d.items.some((i) => i.status !== 'pending'))
   await deps.log({
     ...baseLog, accounts: authors.length, newFound, failed,
     ...(failures.length ? { failures } : {}),
+    ...(downloadLogs.length ? { downloadDetail: downloadLogs } : {}),
+    ...(didDownload ? { kind: 'check' as const, downloaded: downloadedTotal, existed: existedTotal } : {}),
   })
   return { authors: authors.length, newFound, failed, results }
 }

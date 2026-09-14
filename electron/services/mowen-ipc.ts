@@ -79,6 +79,12 @@ export function registerMowenSubscriptionIpc(deps: MowenSubsIpcDeps): void {
     broadcastUpdated()
   })
 
+  // 订阅开关（对齐微信「取消订阅不是删除」）：off 暂停检查、数据与检查状态保留
+  ipcMain.handle('mowen-subs:setSubscribed', async (_e, uid: string, subscribed: boolean) => {
+    await (await subsOf()).setSubscribed(uid, subscribed)
+    broadcastUpdated()
+  })
+
   ipcMain.handle('mowen-subs:checkNow', (_e, uids?: string[]) => checkNow(uids))
 
   ipcMain.handle('mowen-subs:downloadNotes', async (_e, uid: string, noteIds: string[]) => {
