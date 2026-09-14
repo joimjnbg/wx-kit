@@ -339,12 +339,12 @@
 - [x] `wx-kit mowen unsubscribe --uid <uid>` / `list`（含 newNotes 摘要）/ `check-now [--uid]`（真机验证：水位调低后 4 篇新笔记入列 + 自动下载 + 水位推进 + 复跑零新）。
 - [x] mocli 未装时四个命令统一前置检测出指引 exit 1（复用 M60 的 mowenRunnerOf 既有模式，真机模式已验）。
 
-### 集成 & 收尾
+### 集成 & 收尾（M62）
 
-- [ ] `npm test`、`npm run lint`、`npx tsc --noEmit` 全绿。
-- [ ] GUI e2e：`scripts/test:e2e` 全绿，含 R1/R2/R3 新断言。
-- [ ] 真实墨问笔记端到端验收：① 按用户批量（含付费笔记 1 篇验证如实标注）；② 含图片/音频/代码块的笔记至少 1 篇，验证入库 + 阅读器渲染 + md/html 导出；③ 自己私密笔记 1 篇走 `--show-atom`。
-- [ ] README、wx-kit-skill、ROADMAP 同步刷新。
+- [x] `npm test`、`npm run lint`、`npx tsc --noEmit` 全绿（663 单测）。
+- [x] GUI e2e：`scripts/test:e2e` 全绿，含 R1/R2/R3/R4 新断言。
+- [x] 真实墨问笔记端到端验收：① 按用户批量（含付费笔记如实标注）；② 含图片/音频/代码块/合集引用的笔记多轮验证入库 + 阅读器渲染 + md/html 导出；③ 贴图类微信文章渲染兜底（安哥实测反馈引入）。③' 自己私密笔记 `--show-atom` 未落（顺延，见文末标注）。
+- [x] README、wx-kit-skill、ROADMAP 同步刷新（skill 含 mowen 全部命令；README 覆盖墨问下载/订阅/CLI）。
 - [ ] 发版按规约走 feat 分支 → main → tag → GitHub Release + brew tap（npm 默认不发，安哥点名才发）。
 
 ---
