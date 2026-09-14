@@ -39,7 +39,7 @@ export type CliLinkStatus = 'linked' | 'unlinked' | 'conflict'
 export interface CliLinkInfo { supported: boolean; status: CliLinkStatus; inPath: boolean; dir: string; transient?: boolean }
 
 export interface WxApi {
-  download(urls: string[], formats: DownloadFormat[]): Promise<DownloadSummary>
+  download(urls: string[], formats: DownloadFormat[], opts?: { expandRefs?: boolean }): Promise<DownloadSummary>
   onDownloadProgress(cb: (e: ProgressEvent) => void): () => void
   libraryList(): Promise<ArticleMeta[]>
   librarySearch(keyword: string): Promise<ArticleMeta[]>

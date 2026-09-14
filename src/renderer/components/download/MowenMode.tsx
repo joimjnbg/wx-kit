@@ -76,10 +76,19 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
     if (!ids.length) { message.warning('先勾选要下载的笔记'); return }
     setLoading(true)
     try {
-      const r = await api.download(
-        ids.map((n) => n.url),
-        (await api.getSettings()).defaultFormats,
-      )
+      const formats = (await api.getSettings()).defaultFormats
+      // 展开引用按篇生效（M61：隐式递归是意外不是功能）——勾了「展开」的一批带 expandRefs，
+      // 没勾的一批不带，分两次提交，各批语义互不污染。
+      const expand = ids.filter((n) => expandRefs.has(n.noteId))
+      const plain = ids.filter((n) => !expandRefs.has(n.noteId))
+      const parts = []
+      if (plain.length) parts.push(await api.download(plain.map((n) => n.url), formats))
+      if (expand.length) parts.push(await api.download(expand.map((n) => n.url), formats, { expandRefs: true }))
+      const r = {
+        total: parts.reduce((s, x) => s + x.total, 0),
+        failed: parts.reduce((s, x) => s + x.failed, 0),
+        unavailable: parts.reduce((s, x) => s + (x.unavailable ?? 0), 0),
+      }
       const failed = r.failed
       const unavail = r.unavailable ?? 0
       const msg = unavail

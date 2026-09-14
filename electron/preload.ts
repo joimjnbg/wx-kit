@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { WxApi } from '../src/renderer/api'
 
 const api: WxApi = {
-  download: (urls, formats) => ipcRenderer.invoke('download', { urls, formats }),
+  download: (urls, formats, opts) => ipcRenderer.invoke('download', { urls, formats, expandRefs: opts?.expandRefs }),
   onDownloadProgress: (cb) => {
     const listener = (_e: unknown, ev: Parameters<typeof cb>[0]) => cb(ev)
     ipcRenderer.on('download:progress', listener)

@@ -165,7 +165,8 @@ export default function Library() {
       {items.map((m, i) => (
         <ArticleCard key={m.id} meta={m} libraryRoot={root} index={i} selected={sel.has(m.id)}
           onToggleSelect={() => toggleSel(m.id)} onRead={() => read(m.id)}
-          onReveal={() => api.reveal(m.dir)} onCopyPath={() => copyPath(m)} onDelete={() => delSingle(m.id)} />
+          onReveal={() => api.reveal(m.dir)} onCopyPath={() => copyPath(m)} onDelete={() => delSingle(m.id)}
+          onChanged={load} />
       ))}
     </div>
   )
