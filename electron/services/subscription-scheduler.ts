@@ -43,6 +43,10 @@ export class SubscriptionScheduler {
         this.running = true
         try { await this.deps.runCheck() } finally { this.running = false }
       }
-    } catch { /* 定时检查失败不应影响应用其余部分；下次 tick 再来 */ }
+    } catch (e) {
+      // 定时检查失败不应影响应用其余部分；但完全静默会让「到点没触发」无法诊断
+      // （v0.11.0 安哥实测反馈），至少留一行主进程日志。
+      console.warn('[subscription-scheduler] tick failed:', e instanceof Error ? e.message : e)
+    }
   }
 }
