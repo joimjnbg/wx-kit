@@ -58,6 +58,53 @@ describe('runMowenSubscriptionCheck', () => {
     expect(r.results[0]).toMatchObject({ ok: true, newFound: 1, downloaded: 1 })
     expect(h.downloads).toEqual(['n1'])
     expect((await h.subs.list())[0].newNotes[0].status).toBe('downloaded')
+    // 行内明细同源（对齐微信 M56）：downloadDetail 落条目，articleId=主键可直开阅读器
+    expect(h.logs[0].downloadDetail?.[0]).toMatchObject({
+      fakeid: 'u1', nickname: '池建强',
+      items: [{ title: 't-n1', status: 'downloaded', articleId: 'mowen_n1', url: 'https://note.mowen.cn/detail/n1', refId: 'n1' }],
+    })
+  })
+
+  it('notify 策略：新笔记落 pending 明细（行内列表两种策略同源）；无下载动作不写 downloaded 计数', async () => {
+    const h = await harness({ settings: { subscriptionNewArticleAction: 'notify', defaultFormats: ['md'] } })
+    await runMowenSubscriptionCheck('manual', h.deps)
+    expect(h.downloads).toEqual([])   // notify 不下载
+    const entry = h.logs[0]
+    expect(entry.downloadDetail?.[0].items).toEqual([
+      { title: 't-n1', status: 'pending', url: 'https://note.mowen.cn/detail/n1', refId: 'n1' },
+    ])
+    expect(entry.downloaded).toBeUndefined()
+    expect(entry.kind).toBeUndefined()
+  })
+
+  it('查过无新：落空 items 条目（行内列表据此清空，M58 同规）', async () => {
+    const h = await harness()
+    await runMowenSubscriptionCheck('manual', h.deps)   // 第一轮发现 n1
+    await h.subs.setNoteStatus('u1', ['n1'], 'ignored')
+    // 第二轮：水位已推进，n1/n2/n3 都不再是新——但 n1 已 ignored、merged 里 pending=0
+    h.logs.length = 0
+    const deps: MowenCheckDeps = { ...h.deps, listUserNotes: async () => [item('n1', 1789191409)] }
+    await runMowenSubscriptionCheck('manual', deps)
+    expect(h.logs[0].downloadDetail?.[0].items).toEqual([])
+  })
+
+  it('真故障：落 failed 明细、状态保持 pending，不中断其余篇目', async () => {
+    const h = await harness({ settings: { subscriptionNewArticleAction: 'download', defaultFormats: ['md'] } })
+    const deps: MowenCheckDeps = {
+      ...h.deps,
+      listUserNotes: async () => [item('a', 1789191409), item('b', 1789191500)],
+      downloadNote: async (noteId: string) => {
+        if (noteId === 'a') throw new Error('network down')
+        return { url: 'u', ok: true, id: `mowen_${noteId}`, dir: '/x' }
+      },
+    }
+    const r = await runMowenSubscriptionCheck('manual', deps)
+    expect(r.results[0]).toMatchObject({ ok: true, newFound: 2, downloaded: 1 })
+    const items = h.logs[0].downloadDetail?.[0].items ?? []
+    expect(items.find((x) => x.refId === 'a')).toMatchObject({ status: 'failed', error: 'network down' })
+    expect(items.find((x) => x.refId === 'b')).toMatchObject({ status: 'downloaded' })
+    // failed 保持 pending 可重试
+    expect((await h.subs.list())[0].newNotes.find((x) => x.noteId === 'a')?.status).toBe('pending')
   })
 
   it('重复检查：已见笔记不重复入列；已下载状态不被重置', async () => {
