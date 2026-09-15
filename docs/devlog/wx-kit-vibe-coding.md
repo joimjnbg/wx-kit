@@ -1431,3 +1431,28 @@ moUid（version/moUid 要求 execFile('mocli') 真实跑通，即是注入生效
 成功只证明找得到，不证明跑得动——shebang、动态链接器、相对路径都会在执行层再卡一次；
 修可达性时把「找到」和「跑通」分开验证。③ **发布后的第一份现场报告往往比测试更真**——
 另一台机器就是最诚实的 launchd 环境。
+
+### v0.11.1 发版实录：验收自己抓出时序 bug + tap 脚本参数坑（2026-09-15）
+
+**打包产物的二次验收抓出了第一版的真 bug**：修复合入后首次出包，按规约「真实启动打包后的
+.app 验证」跑 GUI——settings 写回了 `mowenMocliPath` 但 `mowenMocliVersion` 恒 null。根因
+是注入时机：首版把 `injectPathDir` 放在 `detectMocli` 返回之后（调用方注入），而 version
+探测在 detect **内部**就跑完了——最小 PATH 下 `execFile('mocli')` ENOENT，version 永远
+拿不到；CLI 不暴露是因为 `mowen detect` 跑第二次检测时 PATH 已注入，「第二次碰巧成功」
+掩盖了时序。修法是**注入收口进 detectMocli 内部、version 探测之前**（定位→可达→探测，
+语义上本就该一体），并用一条「在 version runner 里捕获当刻 process.env.PATH」的时序测试
+钉死。教训：**「探测」和「执行」的修复要各自验证到产物层**——dev bundle 验过不等于打包
+产物验过，GUI 入口验过不等于 CLI 入口验过；这次若只在 CLI 验收（version 有值）就直接发，
+GUI 用户拿到的还是半修。
+
+**发版新坑：tap 脚本参数形态**。`update-brew-tap.sh` 的用法是**裸版本号**（`0.11.1`），
+脚本内部自拼 `v` 前缀；我传了 `v0.11.1` → API 查 `vv0.11.1` → 404 → **404 的错误 JSON
+被当成 sha256 写进 cask 并照常推送**（tap 仓库短暂存在一个坏 cask，重跑正确参数覆盖）。
+脚本缺陷在于 404 不 fail-fast——digest 拉不到应该立刻退出而不是带着垃圾继续。坑已记宪法
+发版规约处不重录，脚本加固（404 fail-fast + 参数去 v 容错）列待办。
+
+其余按规约走完：版本 bump 与发版文档一次 commit、annotated tag、unset 代理直连 push
+main+tag、gh release create + 三资产逐个上传、digest 逐字节比对全对、`releases/latest`
+指向 v0.11.1、push 后补 `git fetch --tags`（`git describe` 回到 v0.11.1）、brew tap
+零下载核实七项全绿。**exe 资产名本版起在 electron-builder 配置层钉死**（nsis
+artifactName 点分隔模板），发版手工 mv 正式退役。
