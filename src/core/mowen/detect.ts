@@ -23,21 +23,12 @@ export async function detectMocli(run: MocliRunner, which: WhichRunner): Promise
   }
   if (!path) return { installed: false, path: null, version: null }
 
-  // 版本探测失败不影响「已安装」结论（v0.5.5 实录：用户实测输出
-  // `mocli version v0.5.4 (PROD-BUILD ...)`，早期正则 /version\s+(\S+)/ 把 'v' 一起吞进版本号，
-  // 后续做版本比较会出错）。两段独立判定：(1) 含 mocli 字样是「装了」官方证据；
-  // (2) 抓 v?X.Y.Z 形式的版本号串——前缀 v 可选，去前导零不影响。
+  // 版本探测失败不影响「已安装」结论
   let version: string | null = null
   try {
     const v = await run(['--version'])
-    const out = v.stdout + (v.stderr || '')
-    if (/\bmocli\b/i.test(out)) {
-      const m = /(?:^|\s)v?(\d+\.\d+\.\d+(?:-[\w.]+)?)/.exec(out)
-      version = m ? m[1] : null
-    } else {
-      // 含 mocli 字样的版本输出都缺失——视为版本未知，installed 仍为 true
-      version = null
-    }
+    const m = /version\s+(\S+)/.exec(v.stdout)
+    version = m ? m[1] : null
   } catch { /* keep null */ }
   return { installed: true, path, version }
 }
