@@ -290,8 +290,8 @@
 
 - [x] `wx-kit mowen import <note-id>`：单篇拉取并入库，输出 JSON 契约同其他下载命令（真机验证）。
 - [x] `wx-kit mowen import --uid <uid> --count 20 [--expand-refs]`：按用户批量入库（真机验证，含判重 skip）。
-- [ ] `wx-kit mowen detect`：检测 mocli 安装状态并输出。
-- [ ] `wx-kit mowen list-user --uid <uid>` / `search-user --keyword K` / `list-mine` / `search --keyword K`：透传输出 JSON。
+- [x] `wx-kit mowen detect`：检测 mocli 安装状态并输出。
+- [x] `wx-kit mowen list-user --uid <uid>` / `search-user --keyword K` / `list-mine` / `search --keyword K`：透传输出 JSON。
 
 ### R3 · 启动检测 mocli（M60 已完成 2026-09-11）
 
@@ -309,7 +309,7 @@
 - [x] `wx-kit mowen search-user --keyword K`（真机验收；空 keyword → `MOCLI_FAILED/VALIDATE` 如实透传）。
 - [x] `wx-kit mowen list-mine`（真机验收，返回自己的含私密笔记）。
 - [x] `wx-kit mowen search --keyword K`（真机验收）。
-- [ ] `wx-kit mowen import <note-id>`：单篇拉取并入库（M61，随正文通道）。
+- [x] `wx-kit mowen import <note-id>`：单篇拉取并入库（M61，随正文通道）。
 
 ### R4 · 墨问作者订阅（M63 已完成 2026-09-14）
 
@@ -345,7 +345,7 @@
 - [x] GUI e2e：`scripts/test:e2e` 全绿，含 R1/R2/R3/R4 新断言。
 - [x] 真实墨问笔记端到端验收：① 按用户批量（含付费笔记如实标注）；② 含图片/音频/代码块/合集引用的笔记多轮验证入库 + 阅读器渲染 + md/html 导出；③ 贴图类微信文章渲染兜底（安哥实测反馈引入）。③' 自己私密笔记 `--show-atom` 未落（顺延，见文末标注）。
 - [x] README、wx-kit-skill、ROADMAP 同步刷新（skill 含 mowen 全部命令；README 覆盖墨问下载/订阅/CLI）。
-- [ ] 发版按规约走 feat 分支 → main → tag → GitHub Release + brew tap（npm 默认不发，安哥点名才发）。
+- [x] 发版按规约走 feat 分支 → main → tag → GitHub Release + brew tap（npm 默认不发，安哥点名才发）。
 
 ---
 
