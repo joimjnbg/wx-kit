@@ -24,7 +24,7 @@ import { selectArticles, buildManifest } from '../core/material-export'
 import { sortArticles } from '../core/library-sort'
 import { syncToSite } from '../core/site-sync'
 import { detectMocli } from '../core/mowen/detect'
-import { createMocliRunner, createWhichRunner, createLocateDeps, injectPathDir } from '../core/mowen/runner'
+import { createMocliRunner, createWhichRunner, createLocateDeps } from '../core/mowen/runner'
 import { searchUsers, listUserNotes, listMyNotes, authInfo } from '../core/mowen/metadata'
 import { MocliFailed } from '../core/mowen/errors'
 import { searchNotes } from '../core/mowen/search'
@@ -618,7 +618,6 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
       exitCode = 1
       return null
     }
-    injectPathDir(det.path)
     return createMocliRunner()
   }
 

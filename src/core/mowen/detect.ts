@@ -9,6 +9,7 @@
 // mocli——路径定位已下沉到 locate.ts 的三级探测链（which → 安装位 → login shell）。
 import type { MocliRunner } from './types'
 import { locateMocli } from './locate'
+import { injectPathDir } from './runner'
 import type { LocateDeps } from './locate'
 
 export interface MocliDetectResult { installed: boolean; path: string | null; version: string | null }
@@ -20,6 +21,9 @@ export async function detectMocli(run: MocliRunner, which: WhichRunner, locateDe
   // 定位走探测链；不传 deps 时等价旧版「仅 which」（GUI/CLI 调用方应传 runner.ts 的真实 deps）
   const path = await locateMocli(which, { ...locateDeps, platform: locateDeps?.platform ?? process.platform })
   if (!path) return { installed: false, path: null, version: null }
+  // 版本探测前必须注入：execFile('mocli') 与其 shebang `env node` 都靠 PATH 可达——
+  // 注入晚于 version 探测会让 GUI 场景 version 恒 null（实测踩过）。收口在此，调用方无需再注入。
+  injectPathDir(path)
 
   // 版本探测失败不影响「已安装」结论
   let version: string | null = null
