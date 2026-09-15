@@ -106,6 +106,44 @@ jq '[.recentLog[] | select(.downloadDetail != null)
 - 不得把过去日期与 `--download` 组合来回补历史；已有文库日报无法列出从未保存的漏文。
 - `unknownPublishTimeCount` 不为零时应告知有文章无法归入日期；它不是指定日期的缺失篇数。
 
+## 7. 墨问笔记：单篇下载 / 按作者批量（需 mocli）
+
+```sh
+command -v mocli >/dev/null || { echo '先安装: npm install -g @mowenxd/cli 并 mocli auth init'; }
+WX=${WX:-$(command -v wx-kit || echo /Applications/wx-kit.app/Contents/MacOS/wx-kit)}
+
+# (a) 单篇下载（URL 或裸 noteId 均可）
+"$WX" mowen import "https://note.mowen.cn/detail/XXXX" --formats md,meta
+
+# (b) 按作者批量：先用关键词搜作者，把候选给用户确认本尊
+"$WX" mowen subscribe --keyword "作者名字"
+#    → 候选里确认 uid 后直接下载该作者清单（不订阅）：
+"$WX" mowen import --uid <uid> --count 20
+
+# (c) 合集引用：默认只渲染引用块；显式展开才递归下载子笔记
+"$WX" mowen import "https://note.mowen.cn/detail/XXXX" --expand-refs
+```
+
+## 8. 墨问作者订阅与检查
+
+```sh
+# (a) 订阅：先搜索出候选（含 uid/name/intro），带 --uid 确认订阅
+"$WX" mowen subscribe --keyword "作者名字" --uid <uid>
+
+# (b) 查订阅列表与各作者待处理新笔记
+"$WX" mowen list | jq '{authors: [.authors[] | {name, newCount}]}'
+
+# (c) 检查更新（自动下载策略与公众号订阅共用设置；不下载则只入待处理清单）
+"$WX" mowen check-now
+```
+
+要点：
+
+- 墨问发现与订阅检查依赖 **mocli**（未安装时命令返回 `MOCLI_NOT_FOUND` + 安装指引，exit 1）；
+- 订阅**不回补历史**：水位从订阅时刻起算，补历史用 `mowen import --uid`；
+- 付费/私密笔记如实失败（`MowenNoteUnavailable`），不伪装成功；他人私密笔记不可获取；
+- `check-now` 的检查日志独立于公众号订阅（`mowen-subscriptions.json`），逐作者明细在 `results[]`。
+
 ## 失败处理
 
 | 现象 | 含义 | 动作 |
@@ -119,3 +157,5 @@ jq '[.recentLog[] | select(.downloadDetail != null)
 | `unavailable > 0` | 读者本就打不开的篇目（非下载故障） | 与 failed 区分报告，不要混为一谈 |
 | `warnings[]` 非空 | 正文已落盘，但解析或媒体可能不完整 | 读正文前检查警告和产物 |
 | `site sync` slug 冲突 | 目标目录已存在 | 换新 slug 或人工处理，不覆盖 |
+| `MOCLI_NOT_FOUND` | mocli 未安装（墨问功能前置依赖） | 引导安装 `npm install -g @mowenxd/cli` 并 `mocli auth init` |
+| `MOCLI_FAILED` / 笔记不可访问 | mocli 调用失败或笔记为付费/私密 | 如实报告，不重试付费墙（服务端拦截） |
