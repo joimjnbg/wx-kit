@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-- **当前状态:v0.11.0 已完成开发与验证,待发版** —— 2026-09-11 安哥拍板,原 v0.10.7 取消。**R2 当晚修订为第二版**:从「单 URL 拉取」扩为「下载页新增墨问笔记 tab,按用户名模糊搜索用户 → 条件拉清单(默认全选)→ 批量下载,格式跟设置页」,逻辑与按公众号下载微信文章同构;URL tab 同时识别墨问地址。发现层走 mocli 官方 OpenAPI(`user search` / `notes homepage --uid`);正文层主通道改为 **`note/show` 匿名接口**(安哥同日逆向,`POST note.mowen.cn/api/note/wxa/v1/note/show`,无凭证返回结构化 HTML+图片映射+统计,当晚裸 curl 复验可用),BrowserWindow 渲染(spike #4)降为兜底,自己私密笔记走 `mocli --show-atom`。付费笔记 `ASSET_NOT_FOUND` 抛明确失败类型,不伪装成功;限速 0.5s/篇。覆盖范围:① 公开/会员可看笔记;② 安哥自己写的笔记;❌ 他人私密笔记(按作者授权,无从触达)。**需求/验收契约 `docs/PRD-v0.11.0.md`**;**spike 全过程 `docs/superpowers/spikes/2026-09-11-mowen-integration-feasibility.md`**(含 spike #6 note/show 增补);**安哥逆向探索原文 `dreamble/site/content/posts/2026-09-11-mowen-cli-exploration/`**;spike 脚本 `scripts/spike-mowen-api.mjs` + `scripts/spike-mowen-render.mjs` 留库。里程碑拆分 M59(R1,已完成)/M60(检测+mocli 封装+发现链路,已完成)/M61(正文通道+墨问 tab+批量闭环,已完成)/M62(验收+文档)。**R4 增补(2026-09-13 安哥拍板):墨问作者订阅**——以作者为单位订阅,搜索候选带简介(`user search` 原生返回 intro),定时检查新笔记(`notes homepage --uid` 清单比对 publicAt 水位,官方通道无微信封禁问题),订阅页平台 Tab 切换(公众号/墨问作者),检查调度与自动下载设置与微信订阅共用一套;失败保留失败类型、检查成功才推水位(v0.10.5 教训平移);数据落独立 `mowen-subscriptions.json`;CLI `mowen subscribe/unsubscribe/list/check-now`。M59–M63 全部完成，M62 收尾进行中。**M63 落地后的安哥实测修复轮（09-14/15，共 8 轮）**：贴图文章渲染兜底（fetch 拿到 JS 壳→offscreen 渲染提取，7 张轮播图全落地+空内容诚实告警）；订阅页与微信 tab 逐像素对齐（平台 Tab、候选已订阅标记、行内订阅开关/文库入口/本轮清单、检查记录弹窗）；墨问检查日志独立落 mowen-subscriptions.json（原与微信共用 subscriptions.json——两平台调度结构性同时触发，共享写路径是设计出来的竞态；一次性迁移归位历史条目）；URL 输入框文案覆盖双平台；卡片提示/告警分级可点开行动（引用笔记列真实标题+库内状态+一键补下）；expandRefs 在父笔记判重时也生效（此前提前 return 让「补下引用子笔记」永远不生效——同一 bug 让 M61 的 GUI 展开勾选从未接线）；调度/日志留痕可观测（tick 失败、检查日志写失败不再静默）。实现计划 `docs/plans/2026-09-13-m63-mowen-subscription.md`。
+- **当前状态:v0.11.0 已完成开发、验证与发版(2026-09-15)** —— 2026-09-11 安哥拍板,原 v0.10.7 取消。**R2 当晚修订为第二版**:从「单 URL 拉取」扩为「下载页新增墨问笔记 tab,按用户名模糊搜索用户 → 条件拉清单(默认全选)→ 批量下载,格式跟设置页」,逻辑与按公众号下载微信文章同构;URL tab 同时识别墨问地址。发现层走 mocli 官方 OpenAPI(`user search` / `notes homepage --uid`);正文层主通道改为 **`note/show` 匿名接口**(安哥同日逆向,`POST note.mowen.cn/api/note/wxa/v1/note/show`,无凭证返回结构化 HTML+图片映射+统计,当晚裸 curl 复验可用),BrowserWindow 渲染(spike #4)降为兜底,自己私密笔记走 `mocli --show-atom`。付费笔记 `ASSET_NOT_FOUND` 抛明确失败类型,不伪装成功;限速 0.5s/篇。覆盖范围:① 公开/会员可看笔记;② 安哥自己写的笔记;❌ 他人私密笔记(按作者授权,无从触达)。**需求/验收契约 `docs/PRD-v0.11.0.md`**;**spike 全过程 `docs/superpowers/spikes/2026-09-11-mowen-integration-feasibility.md`**(含 spike #6 note/show 增补);**安哥逆向探索原文 `dreamble/site/content/posts/2026-09-11-mowen-cli-exploration/`**;spike 脚本 `scripts/spike-mowen-api.mjs` + `scripts/spike-mowen-render.mjs` 留库。里程碑拆分 M59(R1,已完成)/M60(检测+mocli 封装+发现链路,已完成)/M61(正文通道+墨问 tab+批量闭环,已完成)/M62(验收+文档)。**R4 增补(2026-09-13 安哥拍板):墨问作者订阅**——以作者为单位订阅,搜索候选带简介(`user search` 原生返回 intro),定时检查新笔记(`notes homepage --uid` 清单比对 publicAt 水位,官方通道无微信封禁问题),订阅页平台 Tab 切换(公众号/墨问作者),检查调度与自动下载设置与微信订阅共用一套;失败保留失败类型、检查成功才推水位(v0.10.5 教训平移);数据落独立 `mowen-subscriptions.json`;CLI `mowen subscribe/unsubscribe/list/check-now`。M59–M63 全部完成，M62 收尾完成。**M63 落地后的安哥实测修复轮（09-14/15，共 8 轮）**：贴图文章渲染兜底（fetch 拿到 JS 壳→offscreen 渲染提取，7 张轮播图全落地+空内容诚实告警）；订阅页与微信 tab 逐像素对齐（平台 Tab、候选已订阅标记、行内订阅开关/文库入口/本轮清单、检查记录弹窗）；墨问检查日志独立落 mowen-subscriptions.json（原与微信共用 subscriptions.json——两平台调度结构性同时触发，共享写路径是设计出来的竞态；一次性迁移归位历史条目）；URL 输入框文案覆盖双平台；卡片提示/告警分级可点开行动（引用笔记列真实标题+库内状态+一键补下）；expandRefs 在父笔记判重时也生效（此前提前 return 让「补下引用子笔记」永远不生效——同一 bug 让 M61 的 GUI 展开勾选从未接线）；调度/日志留痕可观测（tick 失败、检查日志写失败不再静默）。实现计划 `docs/plans/2026-09-13-m63-mowen-subscription.md`。
 - **最新发布:v0.10.6(2026-09-09,订阅行内本轮检查文章列表)** —— M58:检查后行内显示逐篇文章+五态状态(新增 pending),未下载的单篇下载,已下载点标题直开阅读器,列表持久到该号下次检查;安哥实测揪出四个缺陷同批修复(展开入口随 newRefs 清空消失、自动下载 articleId 恒空、`~` 形态原文链接打不开、旧记录点击无反应)。584 单测 + e2e 全绿,PRD §6 八条全勾。需求/验收 `docs/PRD-v0.10.6.md`。
 - **最新发布:v0.10.5(2026-09-09,登录态失效诚实化)** —— 微信读书登录过期后订阅检查如实报「需重新登录」(此前 401 被 cover 回退吞成空结果,伪装成「没有新文章」——安哥实测两号当天有新文章却报无,直连 cover 证实 401 从未查过);重登后提示即消;`check-now --accounts` 按身份归一匹配。发布说明 `docs/releases/v0.10.5.md`。
 - **v0.8.6、v0.8.7 均未发布且不再发布** —— M44–M47、M49 的有效成果由 v0.9.0 吸收；两份 PRD 仅保留历史设计与需求去向，不是当前验收契约。
@@ -83,6 +83,7 @@
 
 ## 版本发布史(最新在前)
 
+- **v0.11.0 · 2026-09-15 · 墨问接入(发现层 mocli + 正文层 note/show 匿名接口)与墨问作者订阅** —— M59–M63 落地墨问笔记下载(下载页墨问 tab 按用户批量、URL 识别、合集引用展开)、墨问作者订阅(水位比对、与公众号共用调度)、`mowen` 九条 CLI 命令;八轮安哥实测修复(贴图文章渲染兜底、订阅页逐像素对齐、检查日志独立落盘消除设计性竞态、expandRefs 提前 return 致引用子笔记从未生效等)。发布说明 `docs/releases/v0.11.0.md`,复盘 devlog「M62 发版实录」。
 - **v0.10.6 · 2026-09-09 · 订阅行内本轮检查文章列表** —— M58 把行内列表的数据源从「待处理 newRefs」换成检查记录逐篇明细(全号落条目:提示策略 pending、无新文章空 items),新增 pending 第五态与 articleId/url/refId 回填;单篇下载复用批量通道,已下载点标题直开阅读器。安哥实测同批修四缺陷:展开入口随 newRefs 清空消失、articleId 按下载结果自带主键回填(按 url 反查文库踩中短链/长链跨形态坑)、原文链接 `~`→`_` 归一、旧记录点击给引导。发布说明 `docs/releases/v0.10.6.md`,复盘 devlog §55。
 - **v0.10.5 · 2026-09-09 · 登录态失效诚实化** —— 三环相扣的伪装:传输层 401 抛通用 Error、cover 回退 `catch(()=>null)` 吞成空、上层把空读成「无新文章」,`authExpired` 恒 false。修复为 401/403 抛 `MpAuthExpired`(check 链路已有 auth-expired 分支承接)+回退不吞鉴权错误;顺修 `--accounts` 形态错配(list 输出 MP_WXS_ 传参永不命中)。教训进 AGENTS.md 陷阱清单:**失败必须保留失败类型,不得降级为「成功但空」**。发布说明 `docs/releases/v0.10.5.md`。
 - **v0.10.4 · 2026-09-08 · 修复:按公众号筛选只剩最近几篇** —— v0.10.3 的身份筛选值接不住混合库:每号大量 v0.10.1 前的旧文章无 accountId,名称兜底对身份值失效,选中号只剩带身份的最近几篇。修复为按选项等价类(身份+名称全部归一形态)匹配,与归并谓词同源;真实库 381 篇回归各号全量命中。教训:**测试 fixture 全是新形态条目时,形态兼容的回归测不出来——筛选谓词必须与归并谓词同源,不能靠两支兜底拼凑**。发布说明 `docs/releases/v0.10.4.md`。
@@ -115,9 +116,7 @@
 
 ## 下一步 / 候选
 
-**当前在做**:
-
-- **v0.11.0** —— R1 复制保存路径 + R2 墨问接入 + R3 启动检测。`docs/PRD-v0.11.0.md` 已写。里程碑拆分:M59(R1)→M60(检测+元数据层)→M61(渲染层+GUI)→M62(验收+文档)。spike 报告 `docs/superpowers/spikes/2026-09-11-mowen-integration-feasibility.md`。
+**当前在做**:（无在制里程碑；v0.11.0 已于 2026-09-15 发布，见上方发布史）
 
 候选(需要时单议):
 
