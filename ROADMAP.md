@@ -118,6 +118,8 @@
 
 **当前在做**:（无在制里程碑；v0.11.0 已于 2026-09-15 发布，见上方发布史）
 
+**待发版修复(v0.11.1 候选,2026-09-15 已完成待安哥点头发版)**:GUI 启动的进程拿系统最小 PATH,`which` 找不到 nvm/homebrew 装的 mocli——另一台机器装 v0.11.0 后墨问 tab 恒报「未检测到」(开发模式从终端启动继承完整 PATH,故测试期不暴露)。修复:`src/core/mowen/locate.ts` 三级探测链(which → 常见安装位含 nvm 最新版本目录 → login shell 兜底) + 检出后 `injectPathDir` 注入主进程 PATH(mocli shebang 是 `env node`,目录里两者同住一并解决);CLI 与 GUI 双入口统一走 `detectAndInject`/`mowenRunnerOf`。验证:675 单测 + e2e 全绿;模拟 launchd 最小 PATH 环境下 CLI `mowen detect` 返回 installed:true+version+moUid、GUI 启动 10s 内 settings 写入 nvm 绝对路径。陷阱复盘入宪法(AGENTS.md 墨问段)与 devlog。
+
 候选(需要时单议):
 
 - **公式保真** —— 曾定为 v0.10.3 首选项,**2026-09-07 安哥改定继续推迟到下下版**。做之前需先 spike 真实样本(微信文章公式的实际 DOM 形态),再定渲染方案(KaTeX/MathJax/图片化)。

@@ -4,14 +4,26 @@
 // mocli 装没装不该影响 wx-kit 其他功能的启动。
 import { SettingsService } from './settings'
 import { detectMocli } from '../../src/core/mowen/detect'
-import { createMocliRunner, createWhichRunner } from '../../src/core/mowen/runner'
+import { createMocliRunner, createWhichRunner, createLocateDeps, injectPathDir } from '../../src/core/mowen/runner'
 import { searchUsers, listUserNotes } from '../../src/core/mowen/metadata'
 import { MocliFailed, MocliNotFound } from '../../src/core/mowen/errors'
 import { ipcMain } from 'electron'
 
+/**
+ * 统一检测入口：探测链定位 + 版本探测 + PATH 注入。GUI 启动的进程只有系统最小
+ * PATH（macOS 不加载 ~/.zshrc），即便定位到绝对路径，后续 execFile('mocli') 与其
+ * shebang `#!/usr/bin/env node` 仍解析不到——injectPathDir 把 mocli 所在目录
+ * prepend 进主进程 PATH（幂等），nvm/volta/homebrew 的 bin 里 mocli 与 node 同住。
+ */
+async function detectAndInject() {
+  const r = await detectMocli(createMocliRunner(), createWhichRunner(), createLocateDeps())
+  injectPathDir(r.installed ? r.path : null)
+  return r
+}
+
 /** GUI 发现链路的前置检测:未装返回 null(调用方给 MOCLI_NOT_FOUND 载荷)。M63 起订阅 IPC 共用。 */
 export async function mowenRunnerOrNull() {
-  const r = await detectMocli(createMocliRunner(), createWhichRunner())
+  const r = await detectAndInject()
   return r.installed ? createMocliRunner() : null
 }
 function notFoundPayload() {
@@ -25,7 +37,7 @@ function mowenErrorPayload(err: unknown) {
 
 export async function runStartupMowenDetect(settings: SettingsService): Promise<void> {
   try {
-    const r = await detectMocli(createMocliRunner(), createWhichRunner())
+    const r = await detectAndInject()
     await settings.save({
       mowenMocliPath: r.path,
       mowenMocliVersion: r.version,
@@ -41,7 +53,7 @@ export async function runStartupMowenDetect(settings: SettingsService): Promise<
 /** 「重新检测」按钮的即时通道:立即检一次并返回结果(同时刷新 settings 缓存)。 */
 export function registerMowenIpc(settings: SettingsService): void {
   ipcMain.handle('mowen:detect', async () => {
-    const r = await detectMocli(createMocliRunner(), createWhichRunner())
+    const r = await detectAndInject()
     await settings.save({
       mowenMocliPath: r.path,
       mowenMocliVersion: r.version,
