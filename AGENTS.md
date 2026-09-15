@@ -149,6 +149,13 @@ npx electron . download --url "https://mp.weixin.qq.com/s/XXX" --formats md,html
   （卡片「补下引用子笔记」依赖此路径）；测试已钉 `tests/core/mowen/download-mowen-note.test.ts`。
 - **mocli 契约**：stdout 单行 JSON 信封 `{code,status,reply|reason|msg}`，失败判定以 JSON code 为准；
   **失败时错误 JSON 写 stderr**；`which mocli` 是系统命令不是 mocli 子命令（检测用独立 WhichRunner）。
+- **GUI 进程的最小 PATH 找不到 nvm/homebrew 里的 mocli（v0.11.0 发布后另一台机器实录）**：macOS
+  从 Dock/Finder 启动的应用不加载 `~/.zshrc`，只拿 `/usr/bin:/bin:/usr/sbin:/sbin`——开发模式
+  `npm run dev` 从终端启动继承完整 PATH，故测试期永不暴露。检测与执行都必须走
+  `src/core/mowen/locate.ts` 三级探测链（which → 常见安装位含 nvm 最新版本目录 → login shell
+  `$SHELL -ilc 'command -v mocli'` 兜底），且检出路径后必须 `injectPathDir` 把所在目录
+  prepend 进 `process.env.PATH`——mocli 的 shebang 是 `#!/usr/bin/env node`，PATH 里还得有
+  node（nvm/volta/homebrew 的 bin 里两者同住，注入一次全解决）。勿回退成「仅 which」判定。
 - OSS 图片签名 URL 有时效——解析同次流程下完，URL 不入库（与微信视频同坑）。
 
 ---

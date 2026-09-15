@@ -2,9 +2,13 @@
 // mocli 的真实执行通道：execFile 子进程。唯一的 node:child_process 依赖点，
 // 其余 core/mowen 模块只认注入的 runner（测试零子进程）。
 import { execFile } from 'node:child_process'
+import { access, readdir } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { MocliRunner } from './types'
+import type { LocateDeps } from './locate'
 
 const DEFAULT_TIMEOUT_MS = 15_000
+const SHELL_RESOLVE_TIMEOUT_MS = 3_000
 
 export function createMocliRunner(bin = 'mocli'): MocliRunner {
   return (args, timeoutMs = DEFAULT_TIMEOUT_MS) =>
@@ -34,4 +38,37 @@ export function createWhichRunner(): (cmd: string, arg: string) => Promise<{ cod
         resolve({ code: 0, stdout: String(stdout) })
       })
     })
+}
+
+/** locateMocli 的真实 deps：fs 存在性 + login shell（`$SHELL -ilc`，带超时，dotfiles 报错即弃）。 */
+export function createLocateDeps(): LocateDeps {
+  return {
+    exists: async (p) => {
+      try { await access(p) ; return true } catch { return false }
+    },
+    listDir: async (dir) => {
+      try { return await readdir(dir) } catch { return null }
+    },
+    shellResolve: (shellBin, cmd) =>
+      new Promise((resolve, reject) => {
+        // -i 交互加载 .zshrc（nvm 初始化多在此），非 TTY 下多数配置静默；超时/报错一律弃
+        execFile(shellBin, ['-ilc', cmd], { timeout: SHELL_RESOLVE_TIMEOUT_MS }, (err, stdout) => {
+          if (err) return reject(err)
+          resolve({ code: 0, stdout: String(stdout) })
+        })
+      }),
+  }
+}
+
+/**
+ * 把二进制所在目录 prepend 进本进程 PATH（幂等）。GUI/受限环境里 execFile('mocli')
+ * 与其 shebang `#!/usr/bin/env node` 都依赖 PATH 可达——nvm/volta/homebrew 的 bin 里
+ * mocli 与 node 同住，注入目录一次解决两个可达性。locateMocli 检出路径后调用。
+ */
+export function injectPathDir(binPath: string | null): void {
+  if (!binPath) return
+  const dir = dirname(binPath)
+  const cur = (process.env.PATH ?? '').split(':').filter(Boolean)
+  if (cur.includes(dir)) return
+  process.env.PATH = [dir, ...cur].join(':')
 }
