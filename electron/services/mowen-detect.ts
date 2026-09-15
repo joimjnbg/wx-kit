@@ -4,21 +4,17 @@
 // mocli 装没装不该影响 wx-kit 其他功能的启动。
 import { SettingsService } from './settings'
 import { detectMocli } from '../../src/core/mowen/detect'
-import { createMocliRunner, createWhichRunner, createLocateDeps, injectPathDir } from '../../src/core/mowen/runner'
+import { createMocliRunner, createWhichRunner, createLocateDeps } from '../../src/core/mowen/runner'
 import { searchUsers, listUserNotes } from '../../src/core/mowen/metadata'
 import { MocliFailed, MocliNotFound } from '../../src/core/mowen/errors'
 import { ipcMain } from 'electron'
 
 /**
- * 统一检测入口：探测链定位 + 版本探测 + PATH 注入。GUI 启动的进程只有系统最小
- * PATH（macOS 不加载 ~/.zshrc），即便定位到绝对路径，后续 execFile('mocli') 与其
- * shebang `#!/usr/bin/env node` 仍解析不到——injectPathDir 把 mocli 所在目录
- * prepend 进主进程 PATH（幂等），nvm/volta/homebrew 的 bin 里 mocli 与 node 同住。
+ * 统一检测入口：探测链定位 + PATH 注入 + 版本探测（注入收口在 detectMocli 内部、
+ * version 探测之前——注入晚了会让 GUI 场景 version 恒 null，打包产物实测踩过）。
  */
 async function detectAndInject() {
-  const r = await detectMocli(createMocliRunner(), createWhichRunner(), createLocateDeps())
-  injectPathDir(r.installed ? r.path : null)
-  return r
+  return detectMocli(createMocliRunner(), createWhichRunner(), createLocateDeps())
 }
 
 /** GUI 发现链路的前置检测:未装返回 null(调用方给 MOCLI_NOT_FOUND 载荷)。M63 起订阅 IPC 共用。 */
