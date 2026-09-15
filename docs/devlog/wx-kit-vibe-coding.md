@@ -1394,3 +1394,40 @@ checkLog 独立落 mowen-subscriptions.json（GUI/CLI/调度三处同源），�
 指向 v0.11.0 + brew cask 零下载核实七项。宪法（AGENTS.md）同日补墨问约束段——**每个新内容源
 进产品，宪法必须跟上**：双通道架构、检查日志分文件、资源标签开放集合、expandRefs 判重、
 mocli 契约，五条不变量让下一个会话不必重新踩一遍。
+
+## §58 v0.11.0 发布后第一修：GUI 进程的最小 PATH（2026-09-15）
+
+**发布当天另一台机器报「装了 mocli 却提示未检测到」**——v0.11.0 的墨问功能在那台机器上
+整个不可用。根因是 macOS 的老规矩：**从 Dock/Finder 启动的 GUI 应用不加载 `~/.zshrc`**，
+进程只拿 `/usr/bin:/bin:/usr/sbin:/sbin`；mocli 装在 nvm 的 node 目录（或 homebrew），
+这些目录只存在于 shell 配置里——终端 `which` 找得到，GUI 子进程永远找不到。开发模式
+`npm run dev` 从终端启动、继承完整 PATH，**所以测试期这个 bug 物理上不可能暴露**；发布
+说明里「设置页显示路径/版本」的验收也在开发模式做的——验收环境天然带着「终端遗产」。
+本机 settings.json 里 `mowenMocliPath: null` 的残留证实正式版 GUI 在我这台机器同样
+命中，只是没去看默问 tab。
+
+**取证先行**：没有先改代码，先在开发机复刻故障环境——`env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin
+which mocli` 返回非零，一击实锤「探测的 PATH 与终端的 PATH 是两个世界」。
+
+**修法（安哥选 C：安装位探测为主 + login shell 兜底）**：`src/core/mowen/locate.ts` 三级
+探测链——① which（终端场景一击命中，零开销）；② 常见安装位（/opt/homebrew/bin、
+/usr/local/bin、~/.volta/bin、~/.asdf/shims、~/.npm-global/bin、**nvm 最新 node 版本目录**），
+纯文件系统检查、确定性；③ login shell（`$SHELL -ilc 'command -v mocli'`，3 秒超时，
+输出取最后一个绝对路径行且须 exists 认可——.zshrc 可能打垃圾）。win32 不做 ②③：GUI
+进程继承注册表 PATH，`where` 本来就可靠。
+
+**一个隐藏的第二层坑**：找到 mocli 路径 ≠ 能执行。mocli 的 shebang 是
+`#!/usr/bin/env node`——`env` 要在 PATH 里解析到 node，GUI 进程同样没有。好在
+nvm/volta/homebrew 的 bin 目录里 **mocli 与 node 同住**，所以 `injectPathDir` 把 mocli
+所在目录 prepend 进 `process.env.PATH` 一次解决两个可达性；注入放 core/runner.ts，
+GUI（detectAndInject）与 CLI（mowenRunnerOf）双入口统一调用。验证用模拟 launchd 环境
+（env -i 最小 PATH + HOME）跑：CLI `mowen detect` 返回 installed:true + version +
+moUid（version/moUid 要求 execFile('mocli') 真实跑通，即是注入生效的证明）；GUI 启动
+10 秒内 settings.json 写入 nvm 绝对路径。
+
+**方法论三条**：① **GUI 应用的环境类 bug，验收必须在「无终端遗产」的环境里做**——
+`env -i` 复刻 launchd 环境是零成本的近真实验；凡「启动方式不同→环境不同」的怀疑，
+先 `env -i` 一把再谈修法。② **探测与执行是一对**：任何「先探测再执行」的设计，探测
+成功只证明找得到，不证明跑得动——shebang、动态链接器、相对路径都会在执行层再卡一次；
+修可达性时把「找到」和「跑通」分开验证。③ **发布后的第一份现场报告往往比测试更真**——
+另一台机器就是最诚实的 launchd 环境。
