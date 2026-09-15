@@ -131,6 +131,28 @@ npx electron . download --url "https://mp.weixin.qq.com/s/XXX" --formats md,html
 
 ---
 
+## 墨问（mowen）关键约束（v0.11.0 起，勿重踩）
+
+- **双通道架构是已定决策**：发现层（搜用户/拉清单）走 **mocli**（官方 OpenAPI，需安装并 `mocli auth init`）；
+  正文层走 **`note/show` 匿名接口**（`POST note.mowen.cn/api/note/wxa/v1/note/show`，无凭证，民间逆向无 SLA）；
+  自己的私密笔记走 `mocli --show-atom`（未落，顺延）。这与 M49「微信私有接口封禁」原则不冲突——
+  墨问两条通道一个是官方 API、一个是公开分享页自用接口（勿用 M49 教训误杀墨问需求）。
+- **墨问检查日志独立落 `mowen-subscriptions.json` 自己的 `checkLog`，勿并回微信 `subscriptions.json`**——
+  两平台订阅调度结构性同时触发（共用设置+同 slot+同抖动种子），共享写路径是设计出来的竞态，
+  且 withPathLock 只是进程内锁挡不住跨进程（2026-09-15 丢检查条目实录）。人类可读的
+  `subscriptions-check.log` 行日志仍共用（行级 append 原子）。
+- **正文资源标签/页面模板是开放集合**（与微信 `item_show_type` 同一条原则）：贴图类文章
+  （type 8 新模板）的 SSR 是 JS 壳（无 `#js_content`、无图片脚本变量），fetch 拿不到内容时
+  由 `src/core/wechat-render.ts` 走 offscreen BrowserWindow 渲染兜底（手机微信 UA + 滚动懒加载
+  + 稳定信号须含目标图片计数）；解析后正文与图片全空必须告警，不得静默报成功。
+- **`--expand-refs` 在父笔记判重（已在库）时也必须展开子笔记**——判重提前 return 会吞掉展开
+  （卡片「补下引用子笔记」依赖此路径）；测试已钉 `tests/core/mowen/download-mowen-note.test.ts`。
+- **mocli 契约**：stdout 单行 JSON 信封 `{code,status,reply|reason|msg}`，失败判定以 JSON code 为准；
+  **失败时错误 JSON 写 stderr**；`which mocli` 是系统命令不是 mocli 子命令（检测用独立 WhichRunner）。
+- OSS 图片签名 URL 有时效——解析同次流程下完，URL 不入库（与微信视频同坑）。
+
+---
+
 ## 文档索引
 - `ROADMAP.md` — **里程碑状态与路线图（续接看这里）**。状态/进度只在这里维护；各里程碑的详细实现计划放在 `docs/plans/`，其逐里程碑索引也在 ROADMAP 维护。
 - `docs/PRD.md` — 第一阶段（v0.1.0）产品需求（全貌、F1–F5、架构、风控、验收）。**后续每版一份 `docs/PRD-vX.Y.Z.md`**（§4 逐条可勾验收是验收契约），逐版清单见 ROADMAP 的 PRD 索引行。
