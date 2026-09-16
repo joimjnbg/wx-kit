@@ -1,10 +1,11 @@
 // tests/cli/sync-list.test.ts
 // 票据 04:同步列表身份稳定、可重入、无重复行(CLI 缝)。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Subscriptions } from '../../src/core/subscriptions'
+import { refId, sourceUrlKey } from '../../src/core/subscription-refs'
 
 const network = vi.hoisted(() => ({ factory: vi.fn(), cover: vi.fn() }))
 vi.mock('electron', () => ({ BrowserWindow: class {}, session: { fromPartition: vi.fn() } }))
@@ -65,23 +66,28 @@ describe('sync 列表身份稳定可重入(票据 04)', () => {
     const rows = await subs.list()
     expect(rows).toHaveLength(1)
     expect(rows[0].newRefs).toHaveLength(1)
-    expect(rows[0].newRefs[0]).toMatchObject({ title: '最新文章' })
-    const { refId } = await import('../../src/core/subscription-refs')
-    expect(refId(rows[0].newRefs[0])).toMatch(/.+/)
-    expect(rows[0].newRefs[0].url).toContain('mp.weixin.qq.com/s/')
+    expect(rows[0].newRefs[0]).toMatchObject({ title: '最新文章', sourceId: REVIEW })
+    // cover 无发布时间:createTime 为发现时间占位,判重走 sourceId 而非时间
+    expect(rows[0].newRefs[0].itemShowType).toBeUndefined()
+    // 待处理身份即 sourceId(reviewId):URL 的 ~/_ 形态不影响身份
+    expect(refId(rows[0].newRefs[0])).toBe(sourceUrlKey(rows[0].newRefs[0].url))
+    const tildeUrl = rows[0].newRefs[0].url.replace(/_/g, '~')
+    expect(sourceUrlKey(tildeUrl)).toBe(sourceUrlKey(rows[0].newRefs[0].url))
   })
 
-  it('重跑不重复报新:同一 cover 身份第二轮 newFound 归零且无重复行', async () => {
+  it('重跑不重复报新:同一 cover 身份第二轮 newFound 归零且待处理行身份不变', async () => {
     const first = await run()
     expect(first.result.newFound).toBe(1)
+    const subs = new Subscriptions(root)
+    const before = (await subs.list())[0].newRefs.map((r) => refId(r))
     const second = await run()
     expect(second.code).toBe(0)
     expect(second.result.newFound).toBe(0)
-    const subs = new Subscriptions(root)
     const rows = await subs.list()
     expect(rows).toHaveLength(1)
     expect(rows[0].newRefs).toHaveLength(1)
     // 待处理行身份稳定:refId 与首轮一致,不是追加第二行
+    expect(rows[0].newRefs.map((r) => refId(r))).toEqual(before)
     expect(second.result.results[0]).toMatchObject({ newFound: 0 })
   })
 
