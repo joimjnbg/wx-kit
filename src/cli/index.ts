@@ -21,6 +21,7 @@ import { rebuildLibrary } from '../core/rebuild-library'
 import { checkUpdate } from '../core/check-update'
 import { detectChannel, upgradeCommand } from '../core/install-channel'
 import { selectArticles, buildManifest } from '../core/material-export'
+import { applyPick, pickId } from '../core/pick-articles'
 import { sortArticles } from '../core/library-sort'
 import { syncToSite } from '../core/site-sync'
 import { detectMocli } from '../core/mowen/detect'
@@ -375,8 +376,34 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .option('--since <date>', '按下载日期选：YYYY-MM-DD 及之后')
     .option('--account <name>', '按公众号名选（大小写不敏感包含匹配）')
     .option('--all', '导出全库（无选料器时必须显式指定）')
+    .option('--pick <json>', '两层选择器:{"types":{"text":false,"video":false},"include":["refId"],"exclude":["refId"]}，对订阅待处理(newRefs)计算下载集并展示')
+    .option('--from-subscription', '选择源为订阅待处理列表而非文库(与 --pick 联用)')
     .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
     .action(async (opts) => {
+      // 两层选择器分支:对订阅待处理计算下载集,只展示不下载
+      if (opts.pick !== undefined || opts.fromSubscription) {
+        let sel: { types?: Record<string, boolean>; include?: string[]; exclude?: string[] } = {}
+        if (opts.pick !== undefined) {
+          try { sel = JSON.parse(String(opts.pick)) } catch {
+            outJson({ ok: false, error: { code: 'CLI_ERROR', message: '--pick 不是合法 JSON' } }); exitCode = 2; return
+          }
+        }
+        const root = await resolveRoot(opts.out)
+        const subs = new Subscriptions(root)
+        const refs = (await subs.list()).filter((a) => a.subscribed).flatMap((a) => a.newRefs)
+        const { items, total } = applyPick({ refs }, sel)
+        outJson({
+          ok: true, total,
+          count: items.length,
+          items: items.map((r) => ({
+            refId: pickId(r), url: r.url, title: r.title, createTime: r.createTime,
+            ...(r.itemShowType != null ? { itemShowType: r.itemShowType } : {}),
+            ...(r.sourceId ? { sourceId: r.sourceId } : {}),
+          })),
+        })
+        exitCode = 0
+        return
+      }
       const ids = opts.ids ? String(opts.ids).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined
       if (!ids && !opts.since && !opts.account && !opts.all) {
         outJson({ ok: false, error: { code: 'NO_SELECTOR', message: '需指定 --ids / --since / --account 之一，或 --all 导全库' } })
