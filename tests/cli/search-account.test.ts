@@ -1,5 +1,5 @@
 // tests/cli/search-account.test.ts
-// Ticket 03: Seed URL resolves Account (CLI seam). RED: no such test file exists yet.
+// 票据 03:Seed URL 解析 Account(CLI 缝)。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -16,10 +16,10 @@ vi.mock('../../electron/services/mp-runtime', async (original) => ({
 }))
 import { runCli } from '../../src/cli'
 
-// biz MzYzNDg1MDcyNQ== decodes to 3634850725 -> MP_WXS_3634850725
+// biz MzYzNDg1MDcyNQ== 解码得 3634850725 -> MP_WXS_3634850725
 const PAGE = `<html><body><h1 id="activity-name">seed title</h1>`
-  + `<span id="js_name">seed account</span>`
-  + `<script>var biz = "MzYzNDg1MDcyNQ=="; var mid = "2247486019"; var idx = "1";</script>`
+  + `<span id="js_name"></span>`
+  + `<script>var nickname = "script account"; var biz = "MzYzNDg1MDcyNQ=="; var mid = "2247486019"; var idx = "1";</script>`
   + `</body></html>`
 
 let userDataDir: string, stdout: string
@@ -48,8 +48,9 @@ describe('search --url resolves Account identity (ticket 03)', () => {
     expect(code).toBe(0)
     expect(result).toMatchObject({
       ok: true,
-      account: { fakeid: 'MP_WXS_3634850725', nickname: 'seed account' },
+      account: { fakeid: 'MP_WXS_3634850725', nickname: 'script account' },
     })
+    expect(result.note).toContain('尚未登录')
   })
 
   it('error page without biz reports NOT_FOUND as business failure (exit 1)', async () => {
@@ -62,7 +63,7 @@ describe('search --url resolves Account identity (ticket 03)', () => {
   it('non-mp URL is a usage error (exit 2, zero network)', async () => {
     const { code, result } = await run('--url', 'https://example.com/s/x')
     expect(code).toBe(2)
-    expect(result.ok).toBe(false)
+    expect(result).toMatchObject({ ok: false, error: { code: 'CLI_ERROR' } })
     expect(network.factory).not.toHaveBeenCalled()
   })
 })
