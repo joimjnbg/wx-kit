@@ -86,29 +86,49 @@ describe('文库浏览与批量(票据 07)', () => {
 
   it('remove 按 id 删除索引与目录', async () => {
     await seed('a1', '待删文', '甲号')
+    const before = await new Library(root).list()
+    expect(before).toHaveLength(1)
+    const { existsSync } = await import('node:fs')
+    expect(existsSync(before[0].dir)).toBe(true)
     const { code, result } = await run('library', 'remove', '--ids', 'a1')
     expect(code).toBe(0)
     expect(result).toMatchObject({ ok: true, removed: 1 })
     expect(await new Library(root).list()).toHaveLength(0)
+    expect(existsSync(before[0].dir)).toBe(false)
   })
 
-  it('批量下载逐篇上报进度,失败单篇可按 URL 重试且成功篇不重下', async () => {
+  it('批量下载逐篇上报进度,真故障单篇可重试且成功篇不重下', async () => {
     const { writeFile: wf } = await import('node:fs/promises')
     const urlsFile = join(root, 'urls.txt')
-    await wf(urlsFile, 'https://mp.weixin.qq.com/s/good\nhttps://mp.weixin.qq.com/s/dead\n')
+    await wf(urlsFile, 'https://mp.weixin.qq.com/s/good\nhttps://mp.weixin.qq.com/s/flaky\n')
+    // flaky 首轮网络失败(真故障,可重试);第二轮恢复正常
+    // 注意:mockImplementationOnce 排在 beforeEach 的 mockImplementation 之前,
+    // 但队列先下 good(消耗掉 once)再下 flaky —— 故 once 必须设两次或改用条件抛错
+    network.html.mockImplementation(async (_kind: string, url: string) => {
+      if (url.includes('flaky') && !((globalThis as Record<string, unknown>).__flakyOnce)) {
+        ;(globalThis as Record<string, unknown>).__flakyOnce = true
+        throw Object.assign(new Error('网络抖动'), { status: 500 })
+      }
+      if (url.includes('flaky')) return page('波动文', '批量号', '2247486021')
+      return page('批文', '批量号', '2247486019')
+    })
     const first = await run('download', '--urls-file', urlsFile)
     expect(first.result.total).toBe(2)
     expect(first.result.succeeded).toBe(1)
     expect(first.result.failed).toBe(1)
     expect(first.result.ok).toBe(false)
     expect(first.code).toBe(1)
-    // 错误页被认出"审核未通过" → unavailable(重试无用),与真故障区分
-    expect(first.result.items[1]).toMatchObject({ ok: false, unavailable: true })
+    // 首轮 flaky 是真故障(非 unavailable):重试有用
+    expect(first.result.items[1]).toMatchObject({ ok: false })
+    expect(first.result.items[1].unavailable ?? false).toBe(false)
     // 进度上报到 stderr:逐篇 fetch/save 或 failed 阶段
     expect(progress).toContain('2/2')
-    const retry = await run('download', '--url', 'https://mp.weixin.qq.com/s/dead')
-    expect(retry.code).toBe(1)
-    expect(retry.result).toMatchObject({ failed: 1 })
+    const lib = new Library(root)
+    const mid = await lib.list()
+    expect(mid).toHaveLength(1)
+    const retry = await run('download', '--url', 'https://mp.weixin.qq.com/s/flaky')
+    expect(retry.code).toBe(0)
+    expect(retry.result).toMatchObject({ ok: true, succeeded: 1 })
     // 成功篇已在库:按原 URL 重下即跳过,不复制
     const again = await run('download', '--url', 'https://mp.weixin.qq.com/s/good')
     expect(again.result).toMatchObject({ succeeded: 0, skipped: 1 })
