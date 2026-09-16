@@ -1,7 +1,7 @@
 // tests/core/pick-articles.test.ts
 // 票据 05 RED:两层选择器的纯函数契约尚不存在。
 import { describe, expect, it } from 'vitest'
-import { applyPick, type PickInput, type PickSelection } from '../../src/core/pick-articles'
+import { applyPick, type PickInput } from '../../src/core/pick-articles'
 
 const ref = (over: Partial<PickInput['refs'][number]> & { url: string }) => ({
   title: 't', createTime: 1, ...over,
@@ -43,11 +43,12 @@ describe('applyPick 两层选择器', () => {
   })
 })
 
-describe('applyPick 选择对象', () => {
-  it('空选择也返回可展示的清单结构', () => {
-    const sel: PickSelection = { types: { text: false, images: false, audio: false, video: false } }
-    const out = applyPick({ refs: [ref({ url: 'u1' })] }, sel)
-    expect(out.items).toEqual([])
-    expect(out.total).toBe(1)
+describe('applyPick 下载维度键', () => {
+  it('images/audio 不参与条目筛选:关闭也不剔除条目(下载阶段消费)', () => {
+    const out = applyPick(
+      { refs: [ref({ url: 'u1', itemShowType: 0 })] },
+      { types: { images: false, audio: false } },
+    )
+    expect(out.items.map((i) => i.url)).toEqual(['u1'])
   })
 })

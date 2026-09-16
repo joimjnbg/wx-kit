@@ -1,9 +1,9 @@
 // src/core/pick-articles.ts
 // 两层选择器:批量类型开关定默认,单篇勾选覆盖。纯函数,GUI 与 CLI 共用。
 // v1 类型映射:item_show_type 0/8/10/11 → text;5 → video;未知 → text(与解析兜底一致)。
-// images/audio 是下载维度(随正文/附件落地),不是列表类型维度——开关默认全开,
-// 关闭 images 意味着"只下文字骨架",关闭 audio 意味着"跳过音频附件"。
+// images/audio 键保留给下载维度(随正文/附件落地),不参与条目筛选。
 import type { ArticleRef } from './mp-types'
+import { refId } from './subscription-refs'
 
 export interface PickTypes { text?: boolean; images?: boolean; audio?: boolean; video?: boolean }
 
@@ -17,21 +17,17 @@ export interface PickSelection {
 
 export interface PickInput { refs: ArticleRef[] }
 
-/** 与 subscription-refs.refId 同源的待选身份:有主键用 mid_idx,否则归一化 URL。 */
+/** 待选身份与订阅待处理同源(refId):有主键用 mid_idx,否则归一化 URL。 */
 export function pickId(ref: ArticleRef): string {
-  if (ref.appmsgid != null && ref.itemidx != null) return `${ref.appmsgid}_${ref.itemidx}`
-  const raw = ref.url
-  try {
-    const url = new URL(raw)
-    if (url.hostname === 'mp.weixin.qq.com' && url.pathname.startsWith('/s/')) {
-      return `${url.origin}${url.pathname.replace(/~/g, '_')}`
-    }
-  } catch { /* 非 URL 保持原值 */ }
-  return raw
+  return refId(ref)
 }
 
-/** 类型开关是否命中该条目:text 覆盖图文/图片/文字/通告与未知,video 覆盖视频消息。 */
+/** 类型开关是否命中该条目:text 覆盖图文/图片/文字/通告与未知,video 覆盖视频消息。
+ * images/audio 是下载维度(随正文/附件落地,见Exporter的wantImages/downloadVideos),
+ * 不参与条目筛选——v1 按条目类型只分 text/video 两档。 */
 function typeEnabled(ref: ArticleRef, types: PickTypes): boolean {
+  void types.images
+  void types.audio
   if (ref.itemShowType === 5) return types.video !== false
   return types.text !== false
 }
