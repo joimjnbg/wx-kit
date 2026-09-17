@@ -319,6 +319,9 @@ export default function MowenPanel() {
 
   return (
     <div>
+      {/* surface 白底卡片：与下载页/微信面板内容区同形态（2026-09-17 统一）。
+          管理区（搜索→清单）进卡片；「检查记录」留卡片外（与微信面板、下载页历史区同规）。 */}
+      <div className="surface" style={{ padding: '20px 22px' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <Input placeholder="输入墨问作者名字搜索并订阅" value={kw} onChange={(e) => setKw(e.target.value)}
           onPressEnter={search} style={{ width: 280 }} data-testid="mowen-subs-kw" allowClear disabled={searching} />
@@ -425,6 +428,7 @@ export default function MowenPanel() {
             )
           }} />
         )}
+      </div>
 
       <div style={{ marginTop: 24 }} data-testid="mowen-subs-check-log">
         <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>检查记录</h3>
