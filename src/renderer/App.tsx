@@ -5,6 +5,7 @@ import Library from './pages/Library'
 import Reader from './pages/Reader'
 import Settings from './pages/Settings'
 import Subscriptions from './pages/Subscriptions'
+import Sync from './pages/Sync'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route index element={<Download />} />
         <Route path="batch" element={<Navigate to="/" replace />} />
         <Route path="subscriptions" element={<Subscriptions />} />
+        <Route path="sync" element={<Sync />} />
         <Route path="library" element={<Library />} />
         <Route path="reader/:id" element={<Reader />} />
         <Route path="settings" element={<Settings />} />
