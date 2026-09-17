@@ -18,6 +18,10 @@ export default function Sync() {
   const [rows, setRows] = useState<SyncRow[]>([])
   const [syncing, setSyncing] = useState(false)
   const [confirmed, setConfirmed] = useState<{ fakeid: string; nickname: string } | null>(null)
+  // 选择器状态(03 票据落 UI 复选框):单篇勾选 refId 集,重同步时合并保留
+  // checked 为空且 rows 非空 = 用户清空了选择(与"尚未选择"区分,靠行存在性判断)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [checked, setChecked] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let alive = true
@@ -65,7 +69,21 @@ export default function Sync() {
       // 已存档交叉:主键 mid_idx 优先(URL 形态会变),回退归一化 URL
       const archivedIds = new Set(lib.map((m) => m.id))
       const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
-      setRows(buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls }))
+      const next = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      // 重同步合并:行按 refId 去重保留;首轮默认全选,后续只加新行不碰既有选择
+      const isFirst = rows.length === 0
+      setRows((prev) => {
+        const prevIds = new Set(prev.map((r) => r.refId))
+        const kept = prev.filter((r) => next.some((n) => n.refId === r.refId))
+        const fresh = next.filter((n) => !prevIds.has(n.refId))
+        return [...kept, ...fresh]
+      })
+      setChecked((prev) => {
+        const nextIds = new Set(next.map((n) => n.refId))
+        const kept = new Set([...prev].filter((id) => nextIds.has(id)))
+        if (isFirst && prev.size === 0) for (const n of next) kept.add(n.refId)
+        return kept
+      })
     } finally {
       setSyncing(false)
     }
