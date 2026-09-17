@@ -4,15 +4,18 @@
 // 类型映射与 core/message-kind.kindTag 同构(渲染层禁引 core,故此处复述最小映射);
 // 若 message-kind 新增类型,此处需同步跟进(测试钉住视频/图片/未知三档)。
 
-/** 行组装输入:订阅待处理条目的最小展示子集。 */
+/** 行组装输入:订阅待处理条目的最小展示子集(含主键,身份稳定)。 */
 export interface SyncRowInput {
   url: string
   title: string
   itemShowType?: number | null
+  appmsgid?: number
+  itemidx?: number
 }
 
-/** 组装后的行:标题/类型标签/已存档标记。 */
+/** 组装后的行:稳定 refId、标题/类型标签/已存档标记。 */
 export interface SyncRow {
+  refId: string
   url: string
   title: string
   kindLabel: string | null
@@ -40,17 +43,28 @@ function urlKey(raw: string): string {
   return raw
 }
 
-/** 组装行:标题回退 url,类型标签映射,文库集合命中即已存档。 */
-export function buildSyncRows(refs: SyncRowInput[], archivedUrls: Set<string>): SyncRow[] {
-  const archived = new Set([...archivedUrls].map(urlKey))
+/** 稳定身份:微信主键 mid_idx 优先,回退归一化 URL(与 core refId 同规则,渲染层复述)。 */
+export function syncRefId(r: Pick<SyncRowInput, 'url' | 'appmsgid' | 'itemidx'>): string {
+  if (r.appmsgid != null && r.itemidx != null) return `${r.appmsgid}_${r.itemidx}`
+  return urlKey(r.url)
+}
+
+/** 组装行:标题回退 url,类型标签映射,主键或归一化 URL 命中即已存档。 */
+export function buildSyncRows(
+  refs: SyncRowInput[],
+  archived: { archivedIds: Set<string>; archivedUrls: Set<string> },
+): SyncRow[] {
+  const urlSet = new Set([...archived.archivedUrls].map(urlKey))
   return refs.map((r) => {
     const k = kindOf(r.itemShowType)
+    const id = syncRefId(r)
     return {
+      refId: id,
       url: r.url,
       title: r.title.trim() || r.url,
       kindLabel: k.label,
       kindWarn: k.warn,
-      archived: archived.has(urlKey(r.url)),
+      archived: archived.archivedIds.has(id) || urlSet.has(urlKey(r.url)),
     }
   })
 }

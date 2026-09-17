@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Input, List, Select, Spin, Tag, message } from 'antd'
 import { api, type MpSessionInfo, type SubscribedAccount } from '../api'
-import type { ArticleMeta } from '../../core/types'
 import { sessionHint } from '../sync-view'
 import { buildSyncRows, type SyncRow } from '../sync-rows'
 
@@ -63,7 +62,10 @@ export default function Sync() {
       const acc = subs.accounts.find((a) => a.fakeid === fakeid)
       setAccounts(subs.accounts)
       setAuthExpired(subs.authExpired)
-      setRows(buildSyncRows(acc?.newRefs ?? [], new Set(lib.map((m: ArticleMeta) => m.sourceUrl))))
+      // 已存档交叉:主键 mid_idx 优先(URL 形态会变),回退归一化 URL
+      const archivedIds = new Set(lib.map((m) => m.id))
+      const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
+      setRows(buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls }))
     } finally {
       setSyncing(false)
     }
@@ -92,15 +94,16 @@ export default function Sync() {
           <Alert data-testid="sync-confirmed" type="success" style={{ marginTop: 8 }}
             message={`已确认账号:${confirmed.nickname}(${confirmed.fakeid})`} />
         )}
-        <List data-testid="sync-rows" style={{ marginTop: 12 }} bordered
-          dataSource={rows}
-          renderItem={(r) => (
-            <List.Item key={r.url}>
-              <span>{r.title}</span>
-              {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}
-              {r.archived && <Tag color="green">已存档</Tag>}
-            </List.Item>
-          )} />
+          <List data-testid="sync-rows" style={{ marginTop: 12 }} bordered
+            dataSource={rows}
+            locale={{ emptyText: syncing ? '同步中…' : '暂无待处理文章' }}
+            renderItem={(r) => (
+              <List.Item key={r.refId}>
+                <span>{r.title}</span>
+                {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}
+                {r.archived && <Tag color="green">已存档</Tag>}
+              </List.Item>
+            )} />
       </div>
     </div>
   )
