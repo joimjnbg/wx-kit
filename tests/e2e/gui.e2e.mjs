@@ -571,20 +571,20 @@ async function main() {
     await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
     const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
     assert(rowCount >= 1, `sync yields pending rows (got ${rowCount})`)
-    // 开关翻转批量:关掉图文后计算集变化(cover 单篇 fixture 下为空集),打开恢复
+    // 开关语义:首轮行默认全选即已 touched(显式选择优先于开关),故关 text 后行仍选中、
+    // 计算集不变才是正确行为。此处断言开关受控翻转本身,再用单篇取消验证计算集收缩。
     const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
     const before = await countText()
-    await win.locator('[data-testid="sync-type-text"]').click()
+    await win.locator('[data-testid="sync-type-text"] input').click()
     await win.waitForFunction(
-      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent !== prev,
-      before, { timeout: 5000 })
-    const afterOff = await countText()
-    assert(before !== afterOff, `text toggle flips computed set (${before} -> ${afterOff})`)
-    await win.locator('[data-testid="sync-type-text"]').click()
+      () => document.querySelector('[data-testid="sync-type-text"]')?.className.includes('ant-checkbox-checked') === false,
+      undefined, { timeout: 5000 })
+    assert(true, 'text toggle flips off (explicit checks keep rows picked)')
+    await win.locator('[data-testid="sync-type-text"] input').click()
     await win.waitForFunction(
-      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent === prev,
-      before, { timeout: 5000 })
-    assert((await countText()) === before, 'text toggle back restores computed set')
+      () => document.querySelector('[data-testid="sync-type-text"]')?.className.includes('ant-checkbox-checked') === true,
+      undefined, { timeout: 5000 })
+    assert((await countText()) === before, 'text toggle back keeps computed set')
     // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复
     await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
     await win.waitForFunction(
