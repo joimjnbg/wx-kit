@@ -1,6 +1,6 @@
 // tests/core/mowen/mowen-to-article.test.ts
 import { describe, it, expect } from 'vitest'
-import { noteShowToParsedArticle } from '../../../src/core/mowen/mowen-to-article'
+import { noteShowToParsedArticle, type RefNoteMeta } from '../../../src/core/mowen/mowen-to-article'
 import type { NoteShowResult } from '../../../src/core/mowen/note-show'
 
 const base = (over: Partial<NoteShowResult>): NoteShowResult => ({
@@ -8,6 +8,11 @@ const base = (over: Partial<NoteShowResult>): NoteShowResult => ({
   publicAt: 1789088785, authorUid: 'u1', authorName: '池建强',
   images: new Map(), audios: [], refNoteIds: [], warnings: [],
   ...over,
+})
+
+const meta = (uuid: string, over: Partial<RefNoteMeta> = {}): RefNoteMeta => ({
+  uuid, title: '发布第一款 Mac App：CatBar', digest: '极简 Mac 菜单栏图标管理工具',
+  authorName: '池建强', publicAt: 1788506303, state: 'ok', ...over,
 })
 
 describe('noteShowToParsedArticle', () => {
@@ -48,17 +53,98 @@ describe('noteShowToParsedArticle', () => {
     expect(p.contentHtml).toContain('<audio controls src="https://a/a.m4a"')
   })
 
-  it('合集引用：refNoteIds 非空 → 尾部渲染引用块（uuid 前 8 位占位链接）', () => {
-    const p = noteShowToParsedArticle(base({ refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w', 'uhMLoeBwwxLEglwJ6-DV7'] }))
-    expect(p.contentHtml).toContain('mowen-refs')
-    expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
-    expect(p.contentHtml).toContain('6ipCTiFt')   // uuid 前 8 位占位
-    expect(p.warnings.some((w) => w.includes('引用') && w.includes('2'))).toBe(true)
-  })
+  describe('引用卡片（v0.11.2 R1：正文 <note uuid> 原地替换，尾部块退场）', () => {
+    const REF_HTML = '<p>关联阅读：</p><note uuid="6ipCTiFtt0yQRXNeSDA1w"></note><p>2026年9月9日</p>'
 
-  it('无引用不追加引用块', () => {
-    const p = noteShowToParsedArticle(base({}))
-    expect(p.contentHtml).not.toContain('mowen-refs')
+    it('ok 卡：标签原地替换为 blockquote 卡片（标题链接 + 作者 + 摘要）', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w')]]),
+      )
+      expect(p.contentHtml).toContain('<blockquote class="mowen-ref-card">')
+      expect(p.contentHtml).toContain('《发布第一款 Mac App：CatBar》')
+      expect(p.contentHtml).toContain('池建强')
+      expect(p.contentHtml).toContain('极简 Mac 菜单栏图标管理工具')
+      expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
+      // 原生占位标签不再出现（不留空白）
+      expect(p.contentHtml).not.toContain('<note')
+      expect(p.contentHtml).toContain('<p>关联阅读：</p>')
+    })
+
+    it('ok 卡 digest 为空：只渲染标题行', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w', { digest: '' })]]),
+      )
+      const card = p.contentHtml.slice(p.contentHtml.indexOf('<blockquote'))
+      expect(card.startsWith('<blockquote class="mowen-ref-card"><p><a')).toBe(true)
+    })
+
+    it('paid 卡：如实标注付费、不出现标题、链接保留', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w', { state: 'paid', title: undefined, digest: undefined, authorName: undefined })]]),
+      )
+      expect(p.contentHtml).toContain('付费')
+      expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
+      expect(p.contentHtml).not.toContain('《')
+    })
+
+    it('failed 卡：无法获取标题 + 链接', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w', { state: 'failed', title: undefined, digest: undefined, authorName: undefined })]]),
+      )
+      expect(p.contentHtml).toContain('标题获取失败')
+      expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
+    })
+
+    it('无第二参（旧调用方兼容）：refNoteIds 非空时按 failed 卡渲染，不留裸标签', () => {
+      const p = noteShowToParsedArticle(base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }))
+      expect(p.contentHtml).not.toContain('<note')
+      expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
+    })
+
+    it('refNoteIds 有、正文无对应标签 → 文末追加卡片（信息不丢）', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: '<p>正文</p>', refNoteIds: ['orphanRefUuid1234567890'] }),
+        new Map([['orphanRefUuid1234567890', meta('orphanRefUuid1234567890')]]),
+      )
+      expect(p.contentHtml).toContain('<blockquote class="mowen-ref-card">')
+      expect(p.contentHtml).toContain('《发布第一款 Mac App：CatBar》')
+      expect(p.warnings.some((w) => w.includes('未在正文出现'))).toBe(true)
+    })
+
+    it('正文有标签、refNoteIds 无（防御）：failed 卡 + warning，不留裸标签', () => {
+      const p = noteShowToParsedArticle(base({ contentHtml: REF_HTML, refNoteIds: [] }))
+      expect(p.contentHtml).not.toContain('<note')
+      expect(p.contentHtml).toContain('https://note.mowen.cn/detail/6ipCTiFtt0yQRXNeSDA1w')
+      expect(p.warnings.some((w) => w.includes('不在引用清单'))).toBe(true)
+    })
+
+    it('尾部 mowen-refs 追加块不再出现；引用引导 warning 保留一条', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w')]]),
+      )
+      expect(p.contentHtml).not.toContain('mowen-refs')
+      expect(p.warnings.some((w) => w.includes('引用子笔记') && w.includes('展开'))).toBe(true)
+    })
+
+    it('卡片文本做 HTML 转义（标题/摘要/作者来自外部接口）', () => {
+      const p = noteShowToParsedArticle(
+        base({ contentHtml: REF_HTML, refNoteIds: ['6ipCTiFtt0yQRXNeSDA1w'] }),
+        new Map([['6ipCTiFtt0yQRXNeSDA1w', meta('6ipCTiFtt0yQRXNeSDA1w', { title: '标题<script>', digest: '<b>摘要</b>', authorName: '作者&名' })]]),
+      )
+      expect(p.contentHtml).toContain('标题&lt;script&gt;')
+      expect(p.contentHtml).not.toContain('<script>')
+      expect(p.contentHtml).toContain('作者&amp;名')
+    })
+
+    it('无引用：不产生卡片', () => {
+      const p = noteShowToParsedArticle(base({}))
+      expect(p.contentHtml).not.toContain('mowen-ref-card')
+    })
   })
 
   it('代码块 HTML 原样保留', () => {

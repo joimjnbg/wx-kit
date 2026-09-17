@@ -1456,3 +1456,38 @@ main+tag、gh release create + 三资产逐个上传、digest 逐字节比对全
 指向 v0.11.1、push 后补 `git fetch --tags`（`git describe` 回到 v0.11.1）、brew tap
 零下载核实七项全绿。**exe 资产名本版起在 electron-builder 配置层钉死**（nsis
 artifactName 点分隔模板），发版手工 mv 正式退役。
+
+## §58 M64（v0.11.2 R1）：引用卡片、以及一条写了三个月没实现的 PRD 契约（2026-09-17）
+
+**需求最小、事实最重的典型**。安哥的原始诉求只有一句「引用块给个标题」，但需求收集阶段
+钉死的事实比实现本身值钱：① 正文引用块原生形态是 `<note uuid>` 纯占位标签——标题在
+正文里本来就不存在（与 `<img uuid>` 同模式），不是我们丢了；② 当前实现根本没处理这个
+标签，阅读器里被浏览器静默吞掉——「关联阅读：」后面是空白这件事，比「没有标题」更早
+就该被发现；③ 付费子笔记（Vibe Coding 专栏样本）note/show 直接 400 ASSET_NOT_FOUND，
+**连标题都不返回**——卡片只能如实标注「付费，标题不可见」，没有绕。
+
+**顺手挖出一条写了三个月没实现的 PRD 契约**：PRD-v0.11.0 白纸黑字「限速 0.5s/篇、
+0.3s/图，写死在 core 层」，实际 `fetchNoteShow` 是裸跑的——GUI `ipc.ts`、CLI 两处调用方
+都没包装，`download-mowen-note.ts` 的注释还写着「限速由调用方决定是否包」（把责任推给
+了调用方，调用方又都没接）。两层都没落地，v0.11.0 的验收清单也没抓出来——因为验收只
+断言了行为正确性，没断言「请求节奏」这种副作用契约。本版收口：限速进 `fetchShowCached`
+单点（唯一网络入口），`minIntervalMs` 暴露给测试传 0。教训：**副作用类契约（限速/间隔/
+频次）必须在计划阶段就设计验证方式，否则和没写一样**。
+
+**缓存的设计取舍**：`showCache` 挂 deps（同一批量下载共享），父 show、引用元信息、
+expandRefs 子下载三处共用——同一 uuid 全程只发一次请求。关键取舍是**失败不缓存**：
+付费子笔记在元信息阶段抛 unavailable、expandRefs 阶段再试一次（两次请求），代价是
+多一拍，换来的是「失败可重试」语义不被缓存吃掉。若缓存失败，「兄弟引用同一篇付费」
+时 expandRefNotes 的 unavailable 归集会静默丢——失败路径的缓存要慎重，宁可多请求。
+
+**验收环境坑（沙箱跑 Electron CLI）**：宿主环境注入 `ELECTRON_RUN_AS_NODE=1`，
+`npx electron .` 实际以纯 Node 跑，`require("electron").protocol` undefined，报错位置
+在 wxfile 协议注册——第一反应会误判成「构建坏了」。判别特征：错误栈里出现
+`Node.js v24.x` 字样。`env -u ELECTRON_RUN_AS_NODE npx electron .` 即恢复。这条对
+后续所有沙箱内 Electron 验收通用。
+
+产物：`<note uuid>` 原地替换为 blockquote 引用卡片（turndown 转 `>` 引用块，md 导出
+标题不丢）；旧尾部 mowen-refs 块退场；refNoteIds 未在正文出现的文末补卡防信息丢失；
+正文有标签但不在清单的（防御）failed 卡 + warning。真机验收：CatBar 0.7 笔记 md 落盘
+`> [《发布第一款 Mac App：CatBar…》](url) · 池建强` + 摘要，html 见卡片，父笔记仅
+2 次请求（父 + 元信息）。78 墨问单测全绿，全量 689。
