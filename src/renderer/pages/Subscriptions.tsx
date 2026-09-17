@@ -376,7 +376,7 @@ export default function Subscriptions() {
 
         <div style={{ marginBottom: 16 }} data-testid="subs-platform-tab">
           <Segmented value={platform} onChange={(v) => setPlatform(v as 'wechat' | 'mowen')}
-            options={[{ label: '公众号', value: 'wechat' }, { label: '墨问作者', value: 'mowen' }]} />
+            options={[{ label: '公众号', value: 'wechat' }, { label: '墨问笔记', value: 'mowen' }]} />
         </div>
 
         {platform === 'mowen' ? <MowenPanel /> : <>
