@@ -29,4 +29,6 @@ export interface MowenNoteListItem {
   wordCount: number | null
   viewCount: number | null
   favorCount: number | null
+  /** 作者名（M65）：仅全站搜索响应有 reply.users 映射可拼；homepage/mine 场景恒空 */
+  authorName?: string
 }

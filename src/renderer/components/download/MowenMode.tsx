@@ -1,22 +1,28 @@
 import { useState } from 'react'
-import { Input, Button, Select, InputNumber, Checkbox, Table, Tag, Typography, message } from 'antd'
+import { Input, Button, Select, InputNumber, Checkbox, Table, Tag, Typography, message, Segmented } from 'antd'
 import { api } from '../../api'
 
 const { Text } = Typography
 
 interface UserItem { uid: string; name: string; intro: string; homeUrl: string }
 interface NoteItem {
-  noteId: string; title: string; brief: string; url: string
+  noteId: string; uid: string; title: string; brief: string; url: string
   publicAt: number | null; withFee: boolean; withImage: boolean; withText: boolean
   wordCount: number | null; viewCount: number | null; favorCount: number | null
+  authorName?: string
 }
 
-// 「墨问笔记」tab（M61 R2a）：搜用户 → 条件拉清单 → 勾选批量下载。
-// 下载走现有 download 通道（mowen URL 在 downloadArticle 路由），进度/历史/结果区全部复用。
+// 「墨问笔记」tab（M61 R2a + M65）：顶部 Segmented「按用户 ｜ 按关键词」两种找法，
+// 一个搜索入口、结果区形态随模式变。下载走现有 download 通道（mowen URL 在
+// downloadArticle 路由），进度/历史/结果区全部复用。
+// 模式切换语义：切模式 = 开新会话，旧结果与勾选清空（半新半旧的混合态最让人困惑）；
+// 唯一例外是搜索结果里点作者名的主动联动——那是有意图的跳转，直接展开该作者清单。
 // mocli 未装：顶部指引条（不灰死整页，PRD R3 降级语义）。
 export default function MowenMode({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = useState<'user' | 'keyword'>('user')
   const [keyword, setKeyword] = useState('')
   const [users, setUsers] = useState<UserItem[] | null>(null)
+  const [authors, setAuthors] = useState<UserItem[]>([])
   const [user, setUser] = useState<UserItem | null>(null)
   const [filter, setFilter] = useState('all')
   const [recent, setRecent] = useState<string | undefined>('7d')
@@ -35,15 +41,33 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
     return false
   }
 
+  /** 切模式 = 开新会话：结果/勾选/选中状态全清，回空态。 */
+  const switchMode = (m: 'user' | 'keyword') => {
+    if (m === mode) return
+    setMode(m)
+    setKeyword(''); setUsers(null); setAuthors([]); setUser(null)
+    setNotes([]); setChecked(new Set()); setExpandRefs(new Set())
+  }
+
   const search = async () => {
-    if (!keyword.trim()) { message.warning('输入要搜索的用户名'); return }
+    if (!keyword.trim()) { message.warning(mode === 'user' ? '输入要搜索的用户名' : '输入要搜索的关键词'); return }
     setLoading(true)
     try {
-      const r = await api.mowenSearchUsers(keyword.trim())
-      if (!handle(r)) return
-      setUsers(r.users ?? [])
-      setUser(null); setNotes([]); setChecked(new Set())
-      if (!r.users?.length) message.info('没有匹配的用户')
+      if (mode === 'user') {
+        const r = await api.mowenSearchUsers(keyword.trim())
+        if (!handle(r)) return
+        setUsers(r.users ?? [])
+        setUser(null); setNotes([]); setChecked(new Set())
+        if (!r.users?.length) message.info('没有匹配的用户')
+      } else {
+        const r = await api.mowenSearchNotes(keyword.trim())
+        if (!handle(r)) return
+        setNotes(r.notes ?? [])
+        setAuthors(r.authors ?? [])
+        setChecked(new Set((r.notes ?? []).filter((n) => !n.withFee).map((n) => n.noteId)))
+        setExpandRefs(new Set())
+        if (!r.notes?.length) message.info('没有匹配的笔记')
+      }
     } finally { setLoading(false) }
   }
 
@@ -62,6 +86,15 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
   const pickUser = (u: UserItem) => {
     setUser(u)
     void listNotes(u)
+  }
+
+  /** 作者联动（有意图的跳转，不算切模式丢状态）：切回「按用户」+ 直接展开该作者清单。 */
+  const jumpToAuthor = (uid: string) => {
+    const a = authors.find((x) => x.uid === uid)
+    if (!a) return
+    setMode('user')
+    setKeyword(''); setUsers(null); setAuthors([])
+    pickUser(a)
   }
 
   const toggle = (id: string) => {
@@ -107,6 +140,35 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
   }
 
+  // 勾选/「含引用子笔记」/下载按钮：两模式的表格共用同一套逻辑
+  const rowSelection = {
+    selectedRowKeys: [...checked],
+    onSelect: (rec: NoteItem) => toggle(rec.noteId),
+    onSelectAll: (selected: boolean, _rows: NoteItem[], changeRows: NoteItem[]) => setChecked((s) => {
+      const n = new Set(s)
+      for (const row of changeRows) {
+        if (selected) { n.add(row.noteId) } else { n.delete(row.noteId) }
+      }
+      return n
+    }),
+  }
+  const downloadButton = (
+    <Button type="primary" size="small" data-testid="mowen-download"
+      disabled={checked.size === 0 || loading} onClick={downloadChecked}
+      loading={loading}>
+      下载选中（{checked.size}）
+    </Button>
+  )
+  const expandColumn = {
+    title: '下载', width: 170,
+    render: (_v: unknown, rec: NoteItem) => (
+      <Checkbox checked={expandRefs.has(rec.noteId)} disabled={!checked.has(rec.noteId)}
+        onChange={() => toggleExpand(rec.noteId)} data-testid="mowen-expand-refs">
+        含引用子笔记
+      </Checkbox>
+    ),
+  }
+
   return (
     <div data-testid="mowen-mode">
       {mocliMissing && (
@@ -116,77 +178,110 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
       )}
       {errorMsg && <div className="setting-hint" style={{ color: 'var(--cinnabar)', marginBottom: 12 }} data-testid="mowen-tab-error">{errorMsg}</div>}
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Input.Search data-testid="mowen-search-input" placeholder="按用户名/简介模糊搜索墨问用户"
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <Segmented
+          value={mode}
+          onChange={(v) => switchMode(v as 'user' | 'keyword')}
+          options={[{ value: 'user', label: '按用户' }, { value: 'keyword', label: '按关键词' }]}
+          data-testid="mowen-mode-seg" />
+        <Input.Search data-testid="mowen-search-input"
+          placeholder={mode === 'user' ? '按用户名/简介模糊搜索墨问用户' : '按关键词搜索全站墨问笔记'}
           value={keyword} onChange={(e) => setKeyword(e.target.value)}
-          onSearch={search} loading={loading} style={{ maxWidth: 420 }} enterButton="搜用户" />
+          onSearch={search} loading={loading} style={{ maxWidth: 420 }}
+          enterButton={mode === 'user' ? '搜用户' : '搜笔记'} />
       </div>
 
-      {users && users.length > 0 && (
-        <div style={{ margin: '12px 0', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {users.map((u) => (
-            <Button key={u.uid} size="small" type={user?.uid === u.uid ? 'primary' : 'default'}
-              data-testid="mowen-user-item" title={u.intro}
-              onClick={() => pickUser(u)}>
-              {u.name}
-            </Button>
-          ))}
-        </div>
+      {mode === 'user' && (
+        <>
+          {users && users.length > 0 && (
+            <div style={{ margin: '12px 0', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {users.map((u) => (
+                <Button key={u.uid} size="small" type={user?.uid === u.uid ? 'primary' : 'default'}
+                  data-testid="mowen-user-item" title={u.intro}
+                  onClick={() => pickUser(u)}>
+                  {u.name}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {user && (
+            <>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
+                <Text strong>「{user.name}」的笔记</Text>
+                <Select value={filter} onChange={(v) => setFilter(v)} style={{ width: 100 }} data-testid="mowen-filter"
+                  options={[{ value: 'all', label: '全部' }, { value: 'album', label: '合集' }, { value: 'fee', label: '付费' }, { value: 'popular', label: '热门' }]} />
+                <Select value={recent} onChange={(v) => setRecent(v)} allowClear placeholder='不限时间' style={{ width: 110 }} data-testid="mowen-recent"
+                  options={[{ value: '24h', label: '24 小时' }, { value: '3d', label: '3 天' }, { value: '7d', label: '7 天' }, { value: '15d', label: '15 天' }]} />
+                <InputNumber min={1} max={100} value={count} onChange={(v) => setCount(v ?? 20)} data-testid="mowen-count" />
+                <Button size="small" onClick={() => listNotes(user)} loading={loading}>刷新清单</Button>
+                <span style={{ flex: 1 }} />
+                {downloadButton}
+              </div>
+
+              <Table<NoteItem>
+                size="small" rowKey="noteId" dataSource={notes} loading={loading}
+                pagination={{ pageSize: 10 }} rowSelection={rowSelection}
+                columns={[
+                  {
+                    title: '标题', dataIndex: 'title', ellipsis: true,
+                    render: (_v, rec) => (
+                      <span>
+                        {rec.withFee && <Tag color="gold" data-testid="mowen-tag-fee">付费</Tag>}
+                        <Text>{rec.title || '(无标题)'}</Text>
+                      </span>
+                    ),
+                  },
+                  { title: '发表', width: 110, render: (_v, rec) => fmtTime(rec.publicAt) },
+                  { title: '字数', width: 80, render: (_v, rec) => rec.wordCount ?? '—' },
+                  expandColumn,
+                ]}
+              />
+            </>
+          )}
+        </>
       )}
 
-      {user && (
+      {mode === 'keyword' && notes.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
-            <Text strong>「{user.name}」的笔记</Text>
-            <Select value={filter} onChange={(v) => setFilter(v)} style={{ width: 100 }} data-testid="mowen-filter"
-              options={[{ value: 'all', label: '全部' }, { value: 'album', label: '合集' }, { value: 'fee', label: '付费' }, { value: 'popular', label: '热门' }]} />
-            <Select value={recent} onChange={(v) => setRecent(v)} allowClear placeholder='不限时间' style={{ width: 110 }} data-testid="mowen-recent"
-              options={[{ value: '24h', label: '24 小时' }, { value: '3d', label: '3 天' }, { value: '7d', label: '7 天' }, { value: '15d', label: '15 天' }]} />
-            <InputNumber min={1} max={100} value={count} onChange={(v) => setCount(v ?? 20)} data-testid="mowen-count" />
-            <Button size="small" onClick={() => listNotes(user)} loading={loading}>刷新清单</Button>
+            <Text strong>「{keyword}」的搜索结果（{notes.length}）</Text>
             <span style={{ flex: 1 }} />
-            <Button type="primary" size="small" data-testid="mowen-download"
-              disabled={checked.size === 0 || loading} onClick={downloadChecked}
-              loading={loading}>
-              下载选中（{checked.size}）
-            </Button>
+            {downloadButton}
           </div>
 
           <Table<NoteItem>
             size="small" rowKey="noteId" dataSource={notes} loading={loading}
-            pagination={{ pageSize: 10 }}
-            rowSelection={{
-              selectedRowKeys: [...checked],
-              onSelect: (rec) => toggle(rec.noteId),
-              onSelectAll: (selected, _rows, changeRows) => setChecked((s) => {
-                const n = new Set(s)
-                for (const row of changeRows) {
-                  if (selected) { n.add(row.noteId) } else { n.delete(row.noteId) }
-                }
-                return n
-              }),
-            }}
+            pagination={{ pageSize: 10 }} rowSelection={rowSelection}
             columns={[
               {
-                title: '标题', dataIndex: 'title', ellipsis: true,
+                title: '标题', dataIndex: 'title',
                 render: (_v, rec) => (
-                  <span>
-                    {rec.withFee && <Tag color="gold" data-testid="mowen-tag-fee">付费</Tag>}
-                    <Text>{rec.title || '(无标题)'}</Text>
-                  </span>
+                  <div>
+                    <div>
+                      {rec.withFee && <Tag color="gold" data-testid="mowen-tag-fee">付费</Tag>}
+                      <Text>{rec.title || '(无标题)'}</Text>
+                    </div>
+                    {rec.brief && <Text type="secondary" style={{ fontSize: 12 }} ellipsis>{rec.brief}</Text>}
+                  </div>
+                ),
+              },
+              {
+                // 作者列：搜索结果跨作者，作者名是判断「哪篇值得下」的第一信号；
+                // 点击 = 联动切回「按用户」并展开该作者完整清单（搜到一篇好笔记 → 看他全部作品）
+                title: '作者', width: 140,
+                render: (_v, rec) => (
+                  rec.authorName
+                    ? <Button type="link" size="small" style={{ padding: 0 }} data-testid="mowen-author-link"
+                        onClick={() => jumpToAuthor(rec.uid)}>
+                        {rec.authorName}
+                      </Button>
+                    : <Text type="secondary">—</Text>
                 ),
               },
               { title: '发表', width: 110, render: (_v, rec) => fmtTime(rec.publicAt) },
-              { title: '字数', width: 80, render: (_v, rec) => rec.wordCount ?? '—' },
-              {
-                title: '下载', width: 170,
-                render: (_v, rec) => (
-                  <Checkbox checked={expandRefs.has(rec.noteId)} disabled={!checked.has(rec.noteId)}
-                    onChange={() => toggleExpand(rec.noteId)} data-testid="mowen-expand-refs">
-                    含引用子笔记
-                  </Checkbox>
-                ),
-              },
+              { title: '阅读', width: 90, render: (_v, rec) => rec.viewCount != null ? rec.viewCount.toLocaleString() : '—' },
+              expandColumn,
             ]}
           />
         </>

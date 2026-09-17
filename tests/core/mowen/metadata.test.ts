@@ -1,7 +1,7 @@
 // tests/core/mowen/metadata.test.ts
 // fixture 来自 2026-09-11 真机 mocli v0.5.4 实测（裁剪），字段形态不猜。
 import { describe, it, expect } from 'vitest'
-import { searchUsers, listUserNotes, authInfo } from '../../../src/core/mowen/metadata'
+import { searchUsers, listUserNotes, authInfo, mapNoteList, mapReplyUsers } from '../../../src/core/mowen/metadata'
 import type { MocliRunner } from '../../../src/core/mowen/types'
 
 const USER_SEARCH_RAW = JSON.stringify({
@@ -46,6 +46,32 @@ const HOMEPAGE_RAW = JSON.stringify({
 const AUTH_RAW = JSON.stringify({
   code: 0, status: 'OK',
   reply: { auth: { api_key: 'MQ4Qz4IBOWP**********ACE5q47opaE', mo_uid: '4L8RrxEaExmHJOf9xrGLo' }, profile: null },
+})
+
+// 全站搜索响应（2026-09-17 真机「AI 编程」实测形态，裁剪）：notes 条目带 uid，
+// reply.users 按 uid 给完整作者映射——搜索结果跨作者，authorName 从这里拼（M65）。
+const NOTE_SEARCH_RAW = JSON.stringify({
+  code: 0, status: 'OK',
+  reply: {
+    note_ids: ['n1AI编程', 'n2AI编程'],
+    notes: {
+      n1AI编程: {
+        note_id: 'n1AI编程', uid: 'u-chijq', title: 'Vibe Coding 实践', brief: '摘要甲',
+        url: 'https://note.mowen.cn/detail/n1AI编程?from=mocli',
+        public_at: 1789088785, flag: { with_text: true },
+        content: { word_count: 300 }, stat: { view: 1200, favor: 33 },
+      },
+      n2AI编程: {
+        note_id: 'n2AI编程', uid: 'u-agou', title: 'Astra 断供评', brief: '摘要乙',
+        url: 'https://note.mowen.cn/detail/n2AI编程?from=mocli',
+        public_at: 1789000000, flag: { with_text: true, with_fee: true },
+      },
+    },
+    users: {
+      'u-chijq': { uid: 'u-chijq', name: '池建强', intro: '墨问西东创始人。', home_url: 'https://note.mowen.cn/user/u-chijq' },
+      'u-agou': { uid: 'u-agou', name: '阿苟', intro: 'Java程序员。', home_url: 'https://note.mowen.cn/user/u-agou' },
+    },
+  },
 })
 
 const VALIDATE_FAIL_RAW = JSON.stringify({ code: 2, status: 'FAIL', reason: 'VALIDATE', msg: 'query is required' })
@@ -95,5 +121,40 @@ describe('listUserNotes', () => {
 describe('authInfo', () => {
   it('取 reply.auth.mo_uid', async () => {
     expect(await authInfo(runner(AUTH_RAW))).toEqual({ moUid: '4L8RrxEaExmHJOf9xrGLo' })
+  })
+})
+
+describe('mapNoteList / mapReplyUsers（M65：搜索结果的作者拼接）', () => {
+  it('搜索响应：条目 authorName 按 reply.users[uid].name 拼接（跨作者）', () => {
+    const reply = JSON.parse(NOTE_SEARCH_RAW).reply
+    const notes = mapNoteList(reply)
+    expect(notes[0]).toMatchObject({ noteId: 'n1AI编程', authorName: '池建强' })
+    expect(notes[1]).toMatchObject({ noteId: 'n2AI编程', authorName: '阿苟' })
+  })
+
+  it('homepage 形态（users 为空对象/无键）：authorName 不设，零行为变更', () => {
+    const reply = JSON.parse(HOMEPAGE_RAW).reply
+    const notes = mapNoteList(reply)
+    expect(notes.every((n) => n.authorName === undefined)).toBe(true)
+    const noUsers = mapNoteList({ note_ids: ['x'], notes: {} })
+    expect(noUsers[0]?.authorName).toBeUndefined()
+  })
+
+  it('users 缺某条目 uid 的映射：该条 authorName undefined，其余正常（不崩）', () => {
+    const reply = JSON.parse(NOTE_SEARCH_RAW).reply
+    delete reply.users['u-agou']
+    const notes = mapNoteList(reply)
+    expect(notes[0]?.authorName).toBe('池建强')
+    expect(notes[1]?.authorName).toBeUndefined()
+  })
+
+  it('mapReplyUsers：返回完整 MowenUser[]（含 intro/homeUrl，供 GUI 作者联动）', () => {
+    const reply = JSON.parse(NOTE_SEARCH_RAW).reply
+    const authors = mapReplyUsers(reply)
+    expect(authors).toHaveLength(2)
+    expect(authors[0]).toEqual({
+      uid: 'u-chijq', name: '池建强', intro: '墨问西东创始人。', homeUrl: 'https://note.mowen.cn/user/u-chijq',
+    })
+    expect(mapReplyUsers({})).toEqual([])
   })
 })

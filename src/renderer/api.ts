@@ -61,7 +61,10 @@ export interface WxApi {
   mowenDetect(): Promise<{ installed: boolean; path: string | null; version: string | null }>
   /** M61:墨问发现链路（GUI tab）。未装 mocli → ok:false + error.code=MOCLI_NOT_FOUND。 */
   mowenSearchUsers(keyword: string): Promise<{ ok: boolean; users?: { uid: string; name: string; intro: string; homeUrl: string }[]; error?: { code: string; message: string } }>
-  mowenListUserNotes(uid: string, opts?: { filter?: string; recent?: string; count?: number }): Promise<{ ok: boolean; notes?: { noteId: string; title: string; brief: string; url: string; publicAt: number | null; withFee: boolean; withImage: boolean; withText: boolean; wordCount: number | null; viewCount: number | null; favorCount: number | null }[]; error?: { code: string; message: string } }>
+  mowenListUserNotes(uid: string, opts?: { filter?: string; recent?: string; count?: number }): Promise<{ ok: boolean; notes?: { noteId: string; uid: string; title: string; brief: string; url: string; publicAt: number | null; withFee: boolean; withImage: boolean; withText: boolean; wordCount: number | null; viewCount: number | null; favorCount: number | null }[]; error?: { code: string; message: string } }>
+  /** M65:全站按关键词搜笔记。notes 条目带 authorName（跨作者场景的第一判断信号），
+   *  authors 为完整作者映射——点作者名联动展开该作者清单要用。 */
+  mowenSearchNotes(keyword: string, count?: number): Promise<{ ok: boolean; notes?: { noteId: string; uid: string; title: string; brief: string; url: string; publicAt: number | null; withFee: boolean; withImage: boolean; withText: boolean; wordCount: number | null; viewCount: number | null; favorCount: number | null; authorName?: string }[]; authors?: { uid: string; name: string; intro: string; homeUrl: string }[]; error?: { code: string; message: string } }>
   copyText(text: string): Promise<void>
   // —— M3.5 批量爬取 ——
   mpAuthStatus(): Promise<{ status: 'missing' | 'present'; valid: false | null; checkedAt?: number }>

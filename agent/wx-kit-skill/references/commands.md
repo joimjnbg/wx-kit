@@ -113,7 +113,7 @@ wx-kit mowen detect                              # 检测 mocli 安装/版本/�
 wx-kit mowen search-user --keyword <名字>         # 模糊搜用户(昵称+简介)，返回 uid/name/intro/homeUrl
 wx-kit mowen list-user --uid <uid> [--filter all|album|fee|popular] [--recent 1h|24h|3d|7d|15d] [--count 20]
 wx-kit mowen list-mine [--filter priv|fee|pub|cond-pub] [--count 20]   # 自己的笔记(含私密)
-wx-kit mowen search --keyword <关键词> [--count 20]                     # 全站搜笔记
+wx-kit mowen search --keyword <关键词> [--count 20]                     # 全站搜笔记(条目带 authorName/阅读数，跨作者)
 wx-kit mowen import <note-id|URL>... [--expand-refs] [--formats 跟设置] # 单篇/多篇下载入库
 wx-kit mowen import --uid <uid> [--count 20] [--expand-refs]           # 按用户批量下载
 wx-kit mowen subscribe --keyword <名字>           # 只搜索：返回候选(uid/name/intro)，供用户确认

@@ -6,6 +6,7 @@ import { SettingsService } from './settings'
 import { detectMocli } from '../../src/core/mowen/detect'
 import { createMocliRunner, createWhichRunner, createLocateDeps } from '../../src/core/mowen/runner'
 import { searchUsers, listUserNotes } from '../../src/core/mowen/metadata'
+import { searchNotes } from '../../src/core/mowen/search'
 import { MocliFailed, MocliNotFound } from '../../src/core/mowen/errors'
 import { ipcMain } from 'electron'
 
@@ -73,6 +74,17 @@ export function registerMowenIpc(settings: SettingsService): void {
         filter: opts?.filter as 'all' | 'album' | 'fee' | 'popular' | undefined,
         recent: opts?.recent, count: opts?.count,
       }) }
+    } catch (err) { return mowenErrorPayload(err) }
+  })
+
+  // M65：全站按关键词搜笔记（GUI「按关键词」模式）。notes 条目带 authorName、
+  // authors 为完整作者映射——渲染层点作者名联动展开清单要用。
+  ipcMain.handle('mowen:searchNotes', async (_e, keyword: string, count?: number) => {
+    const run = await mowenRunnerOrNull()
+    if (!run) return notFoundPayload()
+    try {
+      const r = await searchNotes(run, String(keyword ?? ''), count && count > 0 ? count : 20)
+      return { ok: true, notes: r.notes, authors: r.authors }
     } catch (err) { return mowenErrorPayload(err) }
   })
 }

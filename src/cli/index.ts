@@ -674,7 +674,7 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .action(async (opts) => {
       const run = await mowenRunnerOf()
       if (!run) return
-      try { outJson({ ok: true, notes: await searchNotes(run, String(opts.keyword), Number(opts.count)) }) }
+      try { outJson({ ok: true, notes: (await searchNotes(run, String(opts.keyword), Number(opts.count))).notes }) }
       catch (e) {
         if (e instanceof MocliFailed) { outJson({ ok: false, error: { code: 'MOCLI_FAILED', reason: e.reason, message: e.message } }); exitCode = 1; return }
         throw e

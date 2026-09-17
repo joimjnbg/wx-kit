@@ -1565,3 +1565,29 @@ fixture 注释「真机实测 fileUuids 声明 3 张、images 池只回 2 张」
 但把它当成「被删图/风控」的边缘场景、用告警兜底了。实际上它是常态：墨问的图片池对图集
 本来就不承诺完整，缺图要主动补拉。**把服务端行为的未知当成边缘 case 处理，而不是追问
 「客户端是怎么拿到这张图的」——判断错了问题的性质**，这是比实现更深的一课。
+
+## §61 M65（v0.11.2 R2）：按关键词搜笔记——一次「纯接线」里程碑的接线清单（2026-09-17）
+
+**这个里程碑被正确地预判为「GUI 纯接线」**——底层 `searchNotes` M60 已封装、CLI 已通，
+真机事实（`reply.users[uid]` 有完整作者映射）在需求收集阶段就钉死了。所以实现的全部
+功夫在接线清单的完整性上，值得留档的是几个容易被漏的接缝：
+
+① **作者联动需要的不止名字**。搜到一篇好笔记点作者名 → 展开该作者清单，需要的是完整
+`{uid, name, intro, homeUrl}`——`MowenNoteListItem.authorName` 一个字符串不够用。
+所以 `searchNotes` 复合返回 `{notes, authors}`，authors 来自 `mapReplyUsers`（新导出）。
+CLI 输出仍 `{ok, notes:[...]}`（条目多一个可选 authorName，向后兼容），改一行消费处。
+
+② **api.ts 内联类型漏了 uid**。渲染层 `NoteItem` 一开始没 uid，作者联动的 jumpToAuthor
+没有 key 可用——IPC 数据里其实一直带着（core 的 MowenNoteListItem 有 uid），是
+`mowenListUserNotes` 的 api 类型声明漏了。顺手补齐。**教训：跨进程契约的类型声明是
+手抄的，字段会漂**——core 有而 api.ts 没声明的字段，渲染层就「看得见拿不着」。
+
+③ **UI 拆共用件**。两模式表格的勾选/「含引用子笔记」/下载按钮逻辑完全一致，抽成
+`rowSelection`/`downloadButton`/`expandColumn` 三个共用件，模式分支只管各自的表格列与
+条件行——避免「复制粘贴两份然后改一份」的经典腐化路径。
+
+④ **e2e 只做能稳定做的事**。mocli 是外部二进制 + 真网络，不进 mock e2e；Segmented
+切换的 placeholder 断言是纯 UI 行为，稳定可测。搜索行为本身走真机验收（CLI 侧已验：
+authorName 落位、输出向后兼容；GUI 全链路留给安哥实机点一遍）。
+
+验收：698 单测（+6）、e2e ALL PASSED（M61 既有断言零改动全过 = 按用户模式零回归）。

@@ -27,6 +27,7 @@ const api: WxApi = {
   mowenDetect: () => ipcRenderer.invoke('mowen:detect'),
   mowenSearchUsers: (keyword: string) => ipcRenderer.invoke('mowen:searchUsers', keyword),
   mowenListUserNotes: (uid: string, opts?: { filter?: string; recent?: string; count?: number }) => ipcRenderer.invoke('mowen:listUserNotes', uid, opts),
+  mowenSearchNotes: (keyword: string, count?: number) => ipcRenderer.invoke('mowen:searchNotes', keyword, count),
   copyText: (text) => ipcRenderer.invoke('clipboard:write', text),
   mpAuthStatus: () => ipcRenderer.invoke('mp:authStatus'),
   mpLogin: () => ipcRenderer.invoke('mp:login'),
