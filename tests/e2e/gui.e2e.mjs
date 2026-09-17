@@ -550,14 +550,8 @@ async function main() {
     assert((await win.locator('[data-testid="sync-seed-input"]').count()) === 1, 'sync page shows seed input')
     assert((await win.locator('[data-testid="sync-account-select"]').count()) === 1, 'sync page shows account selector')
     // 用订阅页已沉淀的账号做同步入口(免重复走 mp:search):选号 → 同步 → 待处理行
-    // 账号名为 fixture cover 的 name(订阅 checks 共用同一数据源)
-    const syncAccounts = await win.locator('[data-testid="sync-account-select"] .ant-select-selection-item').count()
-    assert(syncAccounts >= 0, 'sync account selector rendered')
-    await win.click('[data-testid="sync-account-select"] .ant-select-selector')
-    const syncOpts = await win.locator('.ant-select-dropdown:visible .ant-select-item').allInnerTexts()
-    assert(syncOpts.length >= 1, `sync account selector offers subscribed accounts (got ${syncOpts.length})`)
-    await win.locator('.ant-select-dropdown:visible .ant-select-item').first().click()
-    await win.waitForTimeout(180)
+    // 账号名为 fixture cover 的 name(订阅 checks 共用同一数据源),用既有 pickSelect 助手
+    await pickSelect('sync-account-select', '测试订阅号')
     await win.click('[data-testid="sync-run"]')
     await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
     const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
