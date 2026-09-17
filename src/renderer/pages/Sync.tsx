@@ -163,9 +163,9 @@ export default function Sync() {
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <Input data-testid="sync-seed-input" placeholder="粘贴该号任意一篇文章链接"
             value={seedUrl} onChange={(e) => setSeedUrl(e.target.value)} />
-          <Select data-testid="sync-account-select" placeholder="或选已订阅账号" style={{ minWidth: 200 }}
+          <span data-testid="sync-account-select"><Select placeholder="或选已订阅账号" style={{ minWidth: 200 }}
             value={accountId} onChange={(v) => setAccountId(v)}
-            options={accounts.map((a) => ({ label: a.nickname, value: a.fakeid }))} />
+            options={accounts.map((a) => ({ label: a.nickname, value: a.fakeid }))} /></span>
           <Button data-testid="sync-run" type="primary" loading={syncing} onClick={runSync}>同步</Button>
         </div>
         {confirmed && (
