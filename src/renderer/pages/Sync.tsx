@@ -183,9 +183,44 @@ export default function Sync() {
             header={
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Checkbox data-testid="sync-type-text" checked={types.text}
-                  onChange={(e) => setTypes((t) => ({ ...t, text: e.target.checked }))}>图文/文字</Checkbox>
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setTypes((t) => ({ ...t, text: on }))
+                    // 关 text:该类未动过的行取消勾选(显式勾选保留);开 text:该类行默认勾选
+                    setTouched((prev) => {
+                      const next = new Set(prev)
+                      for (const r of rows) if (r.itemShowType !== 5) next.add(r.refId)
+                      return next
+                    })
+                    setChecked((prev) => {
+                      const next = new Set(prev)
+                      for (const r of rows) {
+                        if (r.itemShowType === 5) continue
+                        if (on) next.add(r.refId)
+                        else if (!touched.has(r.refId) || !prev.has(r.refId)) next.delete(r.refId)
+                      }
+                      return next
+                    })
+                  }}>图文/文字</Checkbox>
                 <Checkbox data-testid="sync-type-video" checked={types.video}
-                  onChange={(e) => setTypes((t) => ({ ...t, video: e.target.checked }))}>视频</Checkbox>
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setTypes((t) => ({ ...t, video: on }))
+                    setTouched((prev) => {
+                      const next = new Set(prev)
+                      for (const r of rows) if (r.itemShowType === 5) next.add(r.refId)
+                      return next
+                    })
+                    setChecked((prev) => {
+                      const next = new Set(prev)
+                      for (const r of rows) {
+                        if (r.itemShowType !== 5) continue
+                        if (on) next.add(r.refId)
+                        else if (!touched.has(r.refId) || !prev.has(r.refId)) next.delete(r.refId)
+                      }
+                      return next
+                    })
+                  }}>视频</Checkbox>
                 <span data-testid="sync-pick-count">{pickSummary(picked.length, rows.length)}</span>
                 <Button data-testid="sync-download" type="primary" loading={downloading}
                   disabled={!picked.length} onClick={() => downloadPicked()}>
