@@ -30,14 +30,24 @@ export interface MowenDownloadDeps extends Omit<DownloadArticleDeps, 'fetchHtml'
   /** note/show 结果缓存（uuid → show）：父/元信息/子下载共享，同一 uuid 只发一次请求。
    *  调用方不传则内部惰性建（同一次批量下载传同一 deps 即共享）。 */
   showCache?: Map<string, NoteShowResult>
-  /** 真实请求最小间隔毫秒（默认 500，PRD-v0.11.0「0.5s/篇写死 core 层」契约补课；测试传 0 跳过） */
+  /** 真实请求最小间隔毫秒（默认 500，PRD-v0.11.0「0.5s/篇写死 core 层」契约补课；测试传 0 跳过）。
+   *  注意闸是**模块级共享**的（见下方 lastNoteShowAt），不是 per-deps。 */
   minIntervalMs?: number
 }
 
 export interface RefDownloadRecord { uuid: string; ok: boolean; skipped?: boolean; unavailable?: boolean; title?: string }
 
-/** 限速状态按 deps 实例隔离（同一批量下载共享一个节流闸；WeakMap 不阻回收） */
-const throttleState = new WeakMap<MowenDownloadDeps, number>()
+/** note/show 请求节流闸——模块级共享，跨调用生效。
+ *
+ *  PRD-v0.11.0 的契约是「笔记间隔 0.5s」，按**篇**计，也就是跨调用也要成立。
+ *  M64 初版把闸挂在 deps 实例上（WeakMap），但 GUI 与 CLI 的调用方都是**每篇 URL
+ *  新建 deps 字面量**：GUI `ipc.ts` 的 queue mapper 写 `{...deps, onVideoProgress}`、
+ *  CLI `mowen import` 的 mapper 写内联对象字面量——per-deps 闸于是在每篇开头重置，
+ *  跨篇间隔形同虚设（单次调用内的请求间隔倒是有保障，所以当初单测没暴露）。
+ *  上提为模块级后，同进程内所有墨问 note/show 请求共用一个闸；GUI 手动连点两篇也会
+ *  隔 500ms，这正是「温和请求保通道」要的语义。
+ *  并发进入的请求靠调用方串行队列（DownloadQueue）保证先后；这里只做时间戳节流，不排队。 */
+let lastNoteShowAt = 0
 
 /** 带缓存与限速的 note/show 唯一网络入口：父笔记、引用元信息、expandRefs 子下载全走这里。 */
 async function fetchShowCached(uuid: string, deps: MowenDownloadDeps): Promise<NoteShowResult> {
@@ -46,10 +56,9 @@ async function fetchShowCached(uuid: string, deps: MowenDownloadDeps): Promise<N
   if (hit) return hit
   const min = deps.minIntervalMs ?? 500
   if (min > 0) {
-    const last = throttleState.get(deps) ?? 0
-    const wait = last + min - Date.now()
+    const wait = lastNoteShowAt + min - Date.now()
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
-    throttleState.set(deps, Date.now())
+    lastNoteShowAt = Date.now()
   }
   const show = deps.fetchNoteShow
     ? await deps.fetchNoteShow(uuid)

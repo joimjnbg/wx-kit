@@ -28,11 +28,18 @@ export interface NoteShowDeps {
   fetchJson: (url: string, init: { method: 'POST'; body: string; headers: Record<string, string> }) => Promise<{ status: number; text: string }>
 }
 
-const SHOW_URL = 'https://note.mowen.cn/api/note/wxa/v1/note/show'
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object'
 
+/** note/show 端点。`WXKIT_MOWEN_BASE` 仅供 e2e 把请求指到本地 mock（默认生产域名）。
+ *  这里只能用 env 换 base、不能用 Electron 的 webRequest 拦截——本请求走 Node 的 fetch
+ *  （defaultFetchJson），不经 Chromium 会话，拦不到。 */
+function showUrl(): string {
+  const base = (process.env.WXKIT_MOWEN_BASE ?? 'https://note.mowen.cn').replace(/\/$/, '')
+  return `${base}/api/note/wxa/v1/note/show`
+}
+
 export async function fetchNoteShow(uuid: string, deps: NoteShowDeps): Promise<NoteShowResult> {
-  const res = await deps.fetchJson(SHOW_URL, {
+  const res = await deps.fetchJson(showUrl(), {
     method: 'POST',
     body: JSON.stringify({ uuid }),
     headers: { 'Content-Type': 'application/json' },
