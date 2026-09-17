@@ -601,16 +601,19 @@ async function main() {
     await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
     await waitCount(before, 're-checking restores computed set')
     // 下载贯通:计算集下载落库,断言新增文章目录含 content.md + meta.json
-    // waitForFunction 跑在浏览器上下文,读不到 node 变量:库路径经 WXK_E2E_LIB 环境变量传入
+    // 浏览器上下文读不到 node/fs:轮询改在 node 侧做(读 isolated library.json)
     const libBefore = new Set(JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles.map((a) => a.id))
     await win.click('[data-testid="sync-download"]')
     await win.waitForSelector('[data-testid="sync-dl-progress"], .ant-message-notice', { timeout: 60000 })
-    await win.waitForFunction((known) => {
+    let landed = false
+    for (let i = 0; i < 150; i++) {
       try {
-        const cur = JSON.parse(require('node:fs').readFileSync(require('node:path').join(process.env.WXK_E2E_LIB, 'library.json'), 'utf8')).articles
-        return cur.some((a) => !known.includes(a.id))
-      } catch { return false }
-    }, [...libBefore], { timeout: 60000 })
+        const cur = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
+        if (cur.some((a) => !libBefore.has(a.id))) { landed = true; break }
+      } catch { /* 写盘中途读到半截 JSON,下一轮重试 */ }
+      await win.waitForTimeout(400)
+    }
+    assert(landed, 'sync download lands new library rows within 60s')
     const libAfter = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
     const fresh = libAfter.filter((a) => !libBefore.has(a.id))
     assert(fresh.length >= 1, `sync download lands new library rows (got ${fresh.length})`)
