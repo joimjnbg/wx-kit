@@ -25,7 +25,7 @@ const noteShowOf = (over: Partial<NoteShowResult>): NoteShowResult => ({
 })
 
 // 截获 exportArticle 产出的 ParsedArticle 形态：通过导出的 md 检查
-const makeDeps = (libraryRoot: string, notes: Map<string, NoteShowResult>, opts?: { expandRefs?: boolean }) => ({
+const makeDeps = (libraryRoot: string, notes: Map<string, NoteShowResult>, opts?: { expandRefs?: boolean; minIntervalMs?: number }) => ({
   ...baseDeps(),
   fetchHtml: async () => '',   // mowen 分支不用；DownloadArticleDeps 必填（微信分支用）
   library: new Library(libraryRoot),
@@ -36,6 +36,7 @@ const makeDeps = (libraryRoot: string, notes: Map<string, NoteShowResult>, opts?
     return n
   },
   expandRefs: opts?.expandRefs,
+  minIntervalMs: opts?.minIntervalMs ?? 0,   // 测试默认不限速（限速有专门用例真实等待）
 })
 
 describe('downloadMowenNote', () => {
@@ -164,5 +165,103 @@ describe('downloadMowenNote', () => {
     const deps = makeDeps(root, new Map())
     await expect(downloadMowenNote('https://mp.weixin.qq.com/s/ABC', ['md'], deps))
       .rejects.toThrow(/mowen/i)
+  })
+})
+
+describe('downloadMowenNote · 引用元信息与请求缓存（v0.11.2 R1）', () => {
+  let root: string
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'wxk-mowen-refs-')) })
+
+  const PARENT = 'parentNoteUuid1234567890'
+  const CHILD = 'childNoteUuid123456789012'
+  const parentNote = () => noteShowOf({
+    uuid: PARENT, title: '父',
+    contentHtml: '<p>关联阅读：</p><note uuid="childNoteUuid123456789012"></note><p>完</p>',
+    refNoteIds: [CHILD],
+  })
+
+  /** spy 版 deps：记录每次真实 fetchNoteShow 调用（uuid + 时刻） */
+  const spyDeps = (notes: Map<string, NoteShowResult>, opts?: { expandRefs?: boolean }) => {
+    const calls: string[] = []
+    const at: number[] = []
+    const inner = makeDeps(root, notes, opts)
+    return {
+      deps: {
+        ...inner,
+        fetchNoteShow: async (uuid: string) => {
+          calls.push(uuid); at.push(Date.now())
+          return inner.fetchNoteShow(uuid)
+        },
+      } as typeof inner,
+      calls, at,
+    }
+  }
+
+  it('含引用笔记：元信息成功 → 卡片进 md（blockquote + 标题），父仅 2 次请求（父 + 子元信息）', async () => {
+    const { deps, calls } = spyDeps(new Map([
+      [PARENT, parentNote()],
+      [CHILD, noteShowOf({ uuid: CHILD, title: '子标题甲', digest: '子摘要', authorName: '子作者' })],
+    ]))
+    const r = await downloadMowenNote(PARENT, ['md'], deps)
+    expect(r.ok).toBe(true)
+    const md = readFileSync(join(r.dir!, 'content.md'), 'utf-8')
+    expect(md).toContain('子标题甲')          // 标题进 md（turndown blockquote 不丢）
+    expect(md).toContain('子作者')
+    expect(md).toContain('> ')                 // blockquote → 引用块
+    expect(calls).toEqual([PARENT, CHILD])     // 父 1 + 元信息 1，无第三次
+  })
+
+  it('expandRefs 复用：元信息与子下载共享缓存，同一 uuid 只请求一次', async () => {
+    const { deps, calls } = spyDeps(new Map([
+      [PARENT, parentNote()],
+      [CHILD, noteShowOf({ uuid: CHILD, title: '子' })],
+    ]), { expandRefs: true })
+    const r = await downloadMowenNote(PARENT, ['md'], deps)
+    expect(r.ok).toBe(true)
+    expect(await deps.library.has('mowen_' + CHILD)).toBe(true)
+    expect(calls).toEqual([PARENT, CHILD])     // 子下载命中缓存，不再请求
+  })
+
+  it('付费子笔记：元信息归类 paid 卡如实标注（md 含「付费」），父笔记 ok 落库', async () => {
+    const notes = new Map([[PARENT, parentNote()]])
+    const { deps } = spyDeps(notes)
+    const inner = deps.fetchNoteShow
+    deps.fetchNoteShow = async (uuid: string) => {
+      if (uuid === CHILD) throw new MowenNoteUnavailable()
+      return inner(uuid)
+    }
+    const r = await downloadMowenNote(PARENT, ['md'], deps)
+    expect(r.ok).toBe(true)
+    const md = readFileSync(join(r.dir!, 'content.md'), 'utf-8')
+    expect(md).toContain('付费')
+    expect(md).toContain('https://note.mowen.cn/detail/' + CHILD)
+  })
+
+  it('元信息获取失败（非付费异常）：父笔记仍 ok 落库，failed 卡 + warning，不伪装', async () => {
+    const notes = new Map([[PARENT, parentNote()]])
+    const { deps } = spyDeps(notes)
+    const inner = deps.fetchNoteShow
+    const warns: string[] = []
+    deps.fetchNoteShow = async (uuid: string) => {
+      if (uuid === CHILD) throw new Error('network boom')
+      return inner(uuid)
+    }
+    deps.onWarning = (w?: string) => { if (w) warns.push(w) }
+    const r = await downloadMowenNote(PARENT, ['md'], deps)
+    expect(r.ok).toBe(true)
+    const md = readFileSync(join(r.dir!, 'content.md'), 'utf-8')
+    expect(md).toContain('标题获取失败')
+    expect(warns.some((w) => w.includes('元信息获取失败'))).toBe(true)
+  })
+
+  it('限速（默认 500ms）：两次真实请求间隔不小于 500ms（PRD-v0.11.0 契约补课）', async () => {
+    const { deps, at } = spyDeps(new Map([
+      [PARENT, parentNote()],
+      [CHILD, noteShowOf({ uuid: CHILD, title: '子' })],
+    ]))
+    delete (deps as { minIntervalMs?: number }).minIntervalMs   // 走默认 500ms 闸
+    await downloadMowenNote(PARENT, ['md'], deps)
+    expect(at.length).toBe(2)
+    expect(at[1]! - at[0]!).toBeGreaterThanOrEqual(480)   // 计时器容差
   })
 })

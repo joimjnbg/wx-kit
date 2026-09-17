@@ -123,7 +123,7 @@ wx-kit mowen list                                 # 订阅列表(各作者 newCo
 wx-kit mowen check-now [--uid <uid>]              # 立即检查订阅更新；是否自动下载由设置决定
 ```
 
-- `import`：已删除/付费笔记如实失败（付费墙在服务端，不可绕过）；合集引用默认只渲染引用块，`--expand-refs` 才递归下载子笔记（深度 3，付费子笔记如实 unavailable）；图片自动本地化（OSS 签名 URL 有时效，同次流程下完）。
+- `import`：已删除/付费笔记如实失败（付费墙在服务端，不可绕过）；合集引用默认在正文原地渲染引用卡片（标题/摘要/作者/链接，付费子笔记如实标「标题不可见」），`--expand-refs` 才递归下载子笔记（深度 3，付费子笔记如实 unavailable）；图片自动本地化（OSS 签名 URL 有时效，同次流程下完）。
 - `subscribe`：两步式——先不带 `--uid` 输出候选给用户确认（防同名误订阅），确认后带 `--uid` 入库；重复订阅返回 `ALREADY_SUBSCRIBED`（退出码 1）。
 - `check-now`：水位比对（`publicAt > watermark` 判新），返回逐作者 `results[]`（`newFound`/`downloaded`/`existed`/`unavailable`）；mocli 失败归集到作者名下如实报 `failed`，**不代表没有新笔记**；检查日志与公众号订阅共用（`platform: 'mowen'` 区分）。
 - `list`：`newNotes[]` 每条含 `status`（`pending` 待处理 / `downloaded` / `ignored`）；`newCount` 是 pending 数。
