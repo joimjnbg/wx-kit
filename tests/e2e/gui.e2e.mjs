@@ -572,21 +572,21 @@ async function main() {
     const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
     assert(rowCount >= 1, `sync yields pending rows (got ${rowCount})`)
     // 开关语义:首轮行默认全选即已 touched(显式选择优先于开关),故关 text 后行仍选中、
-    // 计算集不变才是正确行为。此处断言开关 input 的 checked 属性翻转,再用单篇取消验证计算集收缩。
+    // 计算集不变才是正确行为。antd 把 data-testid 放在 label 上,状态看 wrapper-checked 类。
     const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
     const before = await countText()
-    const toggleChecked = () => win.locator('[data-testid="sync-type-text"] input').isChecked()
-    assert(await toggleChecked() === true, 'text toggle starts checked')
+    const toggleOn = () => win.locator('[data-testid="sync-type-text"].ant-checkbox-wrapper-checked').count()
+    assert(await toggleOn() === 1, 'text toggle starts checked')
     await win.locator('[data-testid="sync-type-text"]').click()
     await win.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="sync-type-text"] input')
-      return el && el.checked === false
+      const el = document.querySelector('[data-testid="sync-type-text"]')
+      return el && !el.className.includes('ant-checkbox-wrapper-checked')
     }, undefined, { timeout: 5000 })
     assert(true, 'text toggle flips off (explicit checks keep rows picked)')
     await win.locator('[data-testid="sync-type-text"]').click()
     await win.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="sync-type-text"] input')
-      return el && el.checked === true
+      const el = document.querySelector('[data-testid="sync-type-text"]')
+      return el && el.className.includes('ant-checkbox-wrapper-checked')
     }, undefined, { timeout: 5000 })
     assert((await countText()) === before, 'text toggle back keeps computed set')
     // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复
