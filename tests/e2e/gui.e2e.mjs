@@ -55,22 +55,31 @@ const MP_ARTICLE_URL = `https://mp.weixin.qq.com/s/${WEREAD_TOKEN}`
 // 墨问夹具：父笔记正文里的引用块是 `<note uuid>` 纯占位标签（真机形态，正文本身不带标题），
 // 标题得靠对被引用 uuid 再发一次 note/show 拉回来——v0.11.2 R1 的引用卡片就是这么来的。
 // 子笔记元信息独立成条，用来同时验「卡片有标题」与「父子各一次请求」。
+// 图集也是真机形态的坑：note/show 的图片池对图集不保证完整（3 声明只给 2），
+// 缺的那张要靠第二个匿名接口 gallery/infos({noteUuid,gids}) 补（2026-09-17 真机钉死）。
 const MOWEN_PARENT = 'MowenParent0000000001'
 const MOWEN_CHILD = 'MowenChild00000000002'
+const MOWEN_GID = 'MowenGallery000000001'
+const MOWEN_GALLERY_UUIDS = ['MowenGalImg000000001', 'MowenGalImg000000002', 'MowenGalImg000000003']
+const mowenImgUrl = (port) => `http://127.0.0.1:${port}/pic.png`
 const MOWEN_NOTES = {
-  [MOWEN_PARENT]: {
+  [MOWEN_PARENT]: (port) => ({
     detail: {
       noteBase: {
         uuid: MOWEN_PARENT, title: '墨问父笔记', digest: '父笔记摘要',
-        content: `<p>父笔记正文。</p><p>关联阅读：</p><note uuid="${MOWEN_CHILD}"></note>`,
+        content: `<p>父笔记正文。</p><gallery uuid="${MOWEN_GID}"></gallery><p>关联阅读：</p><note uuid="${MOWEN_CHILD}"></note>`,
         publicAt: 1789088785,
       },
-      noteFile: null,
+      // 池只给图集 3 张中的前 2 张——第三张必须走 gallery/infos 补拉
+      noteFile: {
+        images: Object.fromEntries(MOWEN_GALLERY_UUIDS.slice(0, 2).map((u) => [u, { url: mowenImgUrl(port), scale: { w_1200: mowenImgUrl(port) } }])),
+      },
+      noteGallery: { gids: [MOWEN_GID], gallerys: { [MOWEN_GID]: { gid: MOWEN_GID, fileUuids: MOWEN_GALLERY_UUIDS } } },
       noteRef: [MOWEN_CHILD],
     },
     user: { base: { uid: 'u-mowen-1', name: '墨问父作者' } },
-  },
-  [MOWEN_CHILD]: {
+  }),
+  [MOWEN_CHILD]: () => ({
     detail: {
       noteBase: {
         uuid: MOWEN_CHILD, title: '子笔记标题甲', digest: '子笔记摘要乙',
@@ -80,7 +89,7 @@ const MOWEN_NOTES = {
       noteRef: [],
     },
     user: { base: { uid: 'u-mowen-2', name: '子笔记作者丙' } },
-  },
+  }),
 }
 
 function makeHtml(port, art) {
@@ -124,7 +133,16 @@ async function main() {
       const uuid = JSON.parse((await readBody(req)) || '{}').uuid
       const note = MOWEN_NOTES[uuid]
       res.writeHead(note ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify(note ?? { code: 'ASSET_NOT_FOUND' }))
+      res.end(JSON.stringify(note ? note(server.address().port) : { code: 'ASSET_NOT_FOUND' }))
+    } else if (u.pathname === '/api/note/wxa/v1/gallery/infos') {
+      // 图集补拉：note/show 池不全会缺图，墨问网页端靠这个接口补齐（真机 2026-09-17 钉死）
+      const { noteUuid, gids } = JSON.parse((await readBody(req)) || '{}')
+      const note = noteUuid && MOWEN_NOTES[noteUuid] ? MOWEN_NOTES[noteUuid](server.address().port) : null
+      const gallerys = note?.detail?.noteGallery?.gallerys ?? {}
+      const wanted = (gids ?? []).filter((g) => gallerys[g])
+      const images = Object.fromEntries((gallerys[wanted[0]]?.fileUuids ?? []).map((u2) => [u2, { url: mowenImgUrl(server.address().port), scale: { w_1200: mowenImgUrl(server.address().port) } }]))
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ gids: wanted, gallerys, images }))
     } else if (u.pathname === '/api/mp/cover') {
       // Plan B: 每次只返回该号最新一篇
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -622,6 +640,11 @@ async function main() {
     assert(!!mowenMdRel, 'M64: 墨问笔记落盘到文库（content.md）')
     const mowenMd = readFileSync(join(libraryRoot, mowenMdRel), 'utf-8')
     assert(mowenMd.includes('《子笔记标题甲》'), 'M64: md 导出引用块带标题（turndown 不丢）')
+    // 图集缺图补拉（gallery/infos）：池只给 2/3，第三张必须从 gallery/infos 来
+    const mowenImgCount = (mowenMd.match(/!\[/g) || []).length
+    assert(mowenImgCount === 3, `M64: 图集 3 张图全落盘（池 2 + gallery/infos 补 1，got ${mowenImgCount}）`)
+    const refImgCount = (refHtml.match(/<img /g) || []).length
+    assert(refImgCount === 3, `M64: 阅读器 html 渲染 3 张图集图（got ${refImgCount}）`)
 
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)

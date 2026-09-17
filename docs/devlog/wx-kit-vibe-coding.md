@@ -1540,3 +1540,28 @@ GUI 的 queue mapper 写 `{...deps, onVideoProgress}`、CLI `mowen import` 的 m
 阅读器 iframe 里 `blockquote.mowen-ref-card` 存在 → 卡片带子笔记标题《…》 → 带作者 →
 旧尾部块不再出现（`引用笔记（` 不应命中） → 落盘 content.md 的引用块带标题（turndown
 不丢）。690 单测 + e2e 全绿。
+
+## §60 图集缺图：note/show 的池不是全集，墨问自己也要调第二个接口（2026-09-17）
+
+**又是安哥实测抓的**：子笔记（CatBar 发布文）墨问端 3 张图、我们只下 2 张。这次是真下载
+缺陷，分诊路径值得留档——先看落盘（2 张 + 「图片映射缺失」告警），再拉原始 payload 数
+（图集声明 3 个 fileUuids、noteFile.images 池只给 2 条 URL），最后真浏览器渲染墨问网页端
+（SPA 壳，curl 无效）确认它确实渲染 3 张。三层对齐后问题域收敛为一个：**第三张的 URL 从
+哪来**。
+
+**答案是墨问网页端自己也要调第二个接口**。`performance.getEntriesByType('resource')` 列出
+页面的 XHR/fetch——`note/show` 之外还有一个 `gallery/infos`。参数格式试出来的：
+`{noteUuid, gids}`（试 `{gids}` 单发会 400 GALLERY_NOT_FOUND，必须带 noteUuid——图集按
+笔记归属鉴权）。它匿名可用、返回全量 gallery images（含池里缺的那张的 w_1200）。
+**协议逆向的正路子是数客户端自己的网络请求**，比猜 bundle 里的压缩代码快得多。
+
+**修法**：`note-show.ts` 解析完 galleries/images 后，若图集 fileUuid 有池缺映射 → 补调
+`gallery/infos` 合并（池齐全则不发，无图集不发）；失败退回既有缺图告警，不炸笔记。
+真机验收：3 张全落盘、md/html 各 3 个图片位、零告警、重复下载判重正常。e2e 夹具同步升级
+——父笔记带图集（池故意只给 2/3），断言「3 张图全落盘」把回归钉死。
+
+**为什么当初没发现**：M61 的图集真机样本（同是这篇笔记！）池恰好是全的——不，回头看
+fixture 注释「真机实测 fileUuids 声明 3 张、images 池只回 2 张」，**当时就看到了缺失**，
+但把它当成「被删图/风控」的边缘场景、用告警兜底了。实际上它是常态：墨问的图片池对图集
+本来就不承诺完整，缺图要主动补拉。**把服务端行为的未知当成边缘 case 处理，而不是追问
+「客户端是怎么拿到这张图的」——判断错了问题的性质**，这是比实现更深的一课。
