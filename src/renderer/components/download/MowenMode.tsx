@@ -134,7 +134,7 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
   }
 
   const fmtTime = (sec: number | null) => {
-    if (sec == null) return '—'
+    if (sec == null || sec <= 0) return '—'   // 真机实测：搜索结果有 public_at=0 的条目（显示 1970-01-01 是误导）
     const d = new Date(sec * 1000)
     const p = (x: number) => String(x).padStart(2, '0')
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
@@ -222,6 +222,7 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
               <Table<NoteItem>
                 size="small" rowKey="noteId" dataSource={notes} loading={loading}
                 pagination={{ pageSize: 10 }} rowSelection={rowSelection}
+                tableLayout="fixed"
                 columns={[
                   {
                     title: '标题', dataIndex: 'title', ellipsis: true,
@@ -232,8 +233,8 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
                       </span>
                     ),
                   },
-                  { title: '发表', width: 110, render: (_v, rec) => fmtTime(rec.publicAt) },
-                  { title: '字数', width: 80, render: (_v, rec) => rec.wordCount ?? '—' },
+                  { title: '发表', width: 106, render: (_v, rec) => fmtTime(rec.publicAt) },
+                  { title: '字数', width: 70, render: (_v, rec) => rec.wordCount ?? '—' },
                   expandColumn,
                 ]}
               />
@@ -253,6 +254,7 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
           <Table<NoteItem>
             size="small" rowKey="noteId" dataSource={notes} loading={loading}
             pagination={{ pageSize: 10 }} rowSelection={rowSelection}
+            tableLayout="fixed"
             columns={[
               {
                 title: '标题', dataIndex: 'title',
@@ -269,7 +271,7 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
               {
                 // 作者列：搜索结果跨作者，作者名是判断「哪篇值得下」的第一信号；
                 // 点击 = 联动切回「按用户」并展开该作者完整清单（搜到一篇好笔记 → 看他全部作品）
-                title: '作者', width: 140,
+                title: '作者', width: 110, ellipsis: true,
                 render: (_v, rec) => (
                   rec.authorName
                     ? <Button type="link" size="small" style={{ padding: 0 }} data-testid="mowen-author-link"
@@ -279,8 +281,8 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
                     : <Text type="secondary">—</Text>
                 ),
               },
-              { title: '发表', width: 110, render: (_v, rec) => fmtTime(rec.publicAt) },
-              { title: '阅读', width: 90, render: (_v, rec) => rec.viewCount != null ? rec.viewCount.toLocaleString() : '—' },
+              { title: '发表', width: 106, render: (_v, rec) => fmtTime(rec.publicAt) },
+              { title: '阅读', width: 70, align: 'right' as const, render: (_v, rec) => rec.viewCount != null ? rec.viewCount.toLocaleString() : '—' },
               expandColumn,
             ]}
           />
