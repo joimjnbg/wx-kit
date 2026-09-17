@@ -214,6 +214,14 @@ npm run build
 
 需求、设计与开发约定分别见 [`docs/`](docs/)、[`ROADMAP.md`](ROADMAP.md) 和 [`AGENTS.md`](AGENTS.md)。
 
+## 用户手册
+
+想看「下载一篇文章该按哪个按钮、订阅怎么配、文库怎么用」——直接看
+[`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)（v0.11.2 起随版本同步更新，面向真人用户的
+上手教程，含 GUI 截图与配套插画）。
+
+命令行（CLI）面向 AI agent 的速查表在 `agent/wx-kit-skill/references/commands.md`，不在用户手册范围。
+
 ## License
 
 [Apache-2.0](LICENSE)
