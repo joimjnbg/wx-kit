@@ -123,10 +123,10 @@ export default function Sync() {
       }
       if (!fakeid) return
       // 先读快照(种子行):checkNow 在下载策略下会清待处理,快照保证种子行不丢
-      const [subsBefore, lib] = await Promise.all([api.subscriptionsList(), api.libraryList()])
+      const [subsBefore, libBefore] = await Promise.all([api.subscriptionsList(), api.libraryList()])
       const seedRows = buildSyncRows(
         subsBefore.accounts.find((a) => a.fakeid === fakeid)?.newRefs ?? [],
-        { archivedIds: new Set(), archivedUrls: new Set() },
+        { archivedIds: new Set(libBefore.map((m) => m.id)), archivedUrls: new Set(libBefore.map((m) => m.sourceUrl)) },
       )
       const check = await api.subscriptionsCheckNow([fakeid])
       if (check.note === 'auth-expired' || check.authExpired) { setAuthExpired(true); return }
