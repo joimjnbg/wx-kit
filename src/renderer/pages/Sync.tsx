@@ -122,6 +122,12 @@ export default function Sync() {
         fakeid = hit.fakeid
       }
       if (!fakeid) return
+      // 先读快照(种子行):checkNow 在下载策略下会清待处理,快照保证种子行不丢
+      const [subsBefore, lib] = await Promise.all([api.subscriptionsList(), api.libraryList()])
+      const seedRows = buildSyncRows(
+        subsBefore.accounts.find((a) => a.fakeid === fakeid)?.newRefs ?? [],
+        { archivedIds: new Set(), archivedUrls: new Set() },
+      )
       const check = await api.subscriptionsCheckNow([fakeid])
       if (check.note === 'auth-expired' || check.authExpired) { setAuthExpired(true); return }
       const [subs, lib] = await Promise.all([api.subscriptionsList(), api.libraryList()])
@@ -131,7 +137,10 @@ export default function Sync() {
       // 已存档交叉:主键 mid_idx 优先(URL 形态会变),回退归一化 URL
       const archivedIds = new Set(lib.map((m) => m.id))
       const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
-      const next = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      const fresh = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      // 快照种子行 + 新行并集(种子可能已被检查清掉,但下载仍可用):去重按 refId
+      const seen = new Set(fresh.map((n) => n.refId))
+      const next = [...fresh, ...seedRows.filter((s) => !seen.has(s.refId))]
       // 重同步合并(并集):同 refId 用新行替换(archived 刷新),旧独有行保留,按时间重排
       const isFirst = rows.length === 0
       setRows((prev) => mergeSyncRows(prev, next))
