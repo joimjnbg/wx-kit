@@ -135,20 +135,18 @@ export default function Sync() {
       // 重同步合并(并集):同 refId 用新行替换(archived 刷新),旧独有行保留,按时间重排
       const isFirst = rows.length === 0
       setRows((prev) => mergeSyncRows(prev, next))
-      setChecked((prev) => {
-        const kept = new Set(prev)
-        if (isFirst && prev.size === 0) for (const n of next) kept.add(n.refId)
-        return kept
-      })
-      // 首轮行进入 touched(默认全选即显式选择);后续新行追加进 touched+checked
-      setTouched((prev) => {
-        const kept = new Set(prev)
-        if (isFirst) for (const n of next) kept.add(n.refId)
-        else for (const n of next) {
-          if (!rows.some((r) => r.refId === n.refId)) { kept.add(n.refId); setChecked((c) => new Set(c).add(n.refId)) }
+      // 首轮默认:行与勾选一并进 touched(显式选择);后续新行才追加勾选
+      if (isFirst) {
+        setChecked(new Set(next.map((n) => n.refId)))
+        setTouched(new Set(next.map((n) => n.refId)))
+      } else {
+        const known = new Set(rows.map((r) => r.refId))
+        const fresh = next.filter((n) => !known.has(n.refId))
+        if (fresh.length) {
+          setChecked((prev) => new Set([...prev, ...fresh.map((n) => n.refId)]))
+          setTouched((prev) => new Set([...prev, ...fresh.map((n) => n.refId)]))
         }
-        return kept
-      })
+      }
     } finally {
       setSyncing(false)
     }
