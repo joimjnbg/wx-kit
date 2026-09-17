@@ -1,7 +1,7 @@
 // tests/renderer/sync-rows.test.ts
 // 票据 02a:行组装纯函数(稳定 refId + 已存档交叉)。
 import { describe, it, expect } from 'vitest'
-import { buildSyncRows, mergeSyncRows, syncRefId, type SyncRowInput } from '../../src/renderer/sync-rows'
+import { buildSyncRows, computePicked, mergeSyncRows, pickSummary, syncRefId, type SyncRowInput } from '../../src/renderer/sync-rows'
 
 const row = (over: Partial<SyncRowInput>): SyncRowInput => ({
   url: 'u', title: 't', createTime: 1, ...over,
@@ -62,5 +62,25 @@ describe('mergeSyncRows 并集合并', () => {
     const out = mergeSyncRows(prev, next)
     expect(out.map((r) => r.refId)).toEqual(['u3', '1_1', 'u2'])
     expect(out.find((r) => r.refId === '1_1')?.archived).toBe(true)
+  })
+})
+
+describe('computePicked 选择集', () => {
+  const rows = () => buildSyncRows([
+    row({ url: 't1', title: '文', createTime: 1, itemShowType: 0, appmsgid: 1, itemidx: 1 }),
+    row({ url: 'v1', title: '视', createTime: 2, itemShowType: 5, appmsgid: 2, itemidx: 1 }),
+  ], none())
+  it('默认全开全选;关 text 只剩视频', () => {
+    expect(computePicked(rows(), new Set(), { text: true, video: true })).toHaveLength(2)
+    const out = computePicked(rows(), new Set(), { text: false, video: true })
+    expect(out.map((r) => r.refId)).toEqual(['2_1'])
+  })
+  it('单篇勾选覆盖开关:关 text 后勾选加回图文', () => {
+    const out = computePicked(rows(), new Set(['1_1']), { text: false, video: true })
+    expect(out.map((r) => r.refId).sort()).toEqual(['1_1', '2_1'])
+  })
+  it('pickSummary 话术', () => {
+    expect(pickSummary(0, 3)).toBe('已选 0 / 3 篇')
+    expect(pickSummary(3, 3)).toBe('已选 3 / 3 篇')
   })
 })

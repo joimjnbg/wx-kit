@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Alert, Button, Input, List, Select, Spin, Tag, message } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Alert, Button, Checkbox, Input, List, Select, Spin, Tag, message } from 'antd'
 import { api, type MpSessionInfo, type SubscribedAccount } from '../api'
 import { sessionHint } from '../sync-view'
-import { buildSyncRows, mergeSyncRows, type SyncRow } from '../sync-rows'
+import { buildSyncRows, computePicked, mergeSyncRows, pickSummary, type SyncRow } from '../sync-rows'
 
 // 同步页(票据 02a):Seed URL 确认账号或已选订阅账号 → 待处理行 + 已存档标记。
 // 选择器与下载接线见后续票据;本页负责入口、行列表与登录态。
@@ -18,9 +18,10 @@ export default function Sync() {
   const [rows, setRows] = useState<SyncRow[]>([])
   const [syncing, setSyncing] = useState(false)
   const [confirmed, setConfirmed] = useState<{ fakeid: string; nickname: string } | null>(null)
-  // 选择器状态(03 票据落 UI 复选框):单篇勾选 refId 集,重同步时合并保留
-  // checked 为空且 rows 非空 = 用户清空了选择(与"尚未选择"区分,靠行存在性判断)
+  // 选择器(票据 03):批量类型开关 + 单篇勾选 refId 集;计算集实时预览
+  const [types, setTypes] = useState({ text: true, video: true })
   const [_checked, setChecked] = useState<Set<string>>(new Set())
+  const picked = useMemo(() => computePicked(rows, _checked, types), [rows, _checked, types])
 
   useEffect(() => {
     let alive = true
@@ -108,9 +109,26 @@ export default function Sync() {
           <List data-testid="sync-rows" style={{ marginTop: 12 }} bordered
             dataSource={rows}
             locale={{ emptyText: syncing ? '同步中…' : '暂无待处理文章' }}
+            header={
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <Checkbox data-testid="sync-type-text" checked={types.text}
+                  onChange={(e) => setTypes((t) => ({ ...t, text: e.target.checked }))}>图文/文字</Checkbox>
+                <Checkbox data-testid="sync-type-video" checked={types.video}
+                  onChange={(e) => setTypes((t) => ({ ...t, video: e.target.checked }))}>视频</Checkbox>
+                <span data-testid="sync-pick-count">{pickSummary(picked.length, rows.length)}</span>
+              </div>
+            }
             renderItem={(r) => (
               <List.Item key={r.refId}>
-                <span>{r.title}</span>
+                <Checkbox data-testid={`sync-check-${r.refId}`} checked={picked.some((p) => p.refId === r.refId)}
+                  onChange={(e) => setChecked((prev) => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(r.refId)
+                    else next.delete(r.refId)
+                    return next
+                  })}>
+                  <span>{r.title}</span>
+                </Checkbox>
                 {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}
                 {r.archived && <Tag color="green">已存档</Tag>}
               </List.Item>

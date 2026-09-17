@@ -51,6 +51,26 @@ export function syncRefId(r: Pick<SyncRowInput, 'url' | 'appmsgid' | 'itemidx'>)
   return urlKey(r.url)
 }
 
+/** 选择集计算(渲染层复述 core/applyPick 规则,禁引 core):
+ * 类型开关定默认(text 覆盖非视频,video 覆盖视频5),单篇勾选覆盖。
+ * checked 为显式勾选集;withTypes 为批量开关(默认全开)。 */
+export function computePicked(
+  rows: SyncRow[],
+  checked: Set<string>,
+  withTypes: { text: boolean; video: boolean },
+): SyncRow[] {
+  return rows.filter((r) => {
+    if (checked.has(r.refId)) return true
+    const isVideo = r.kindLabel === '视频'
+    return isVideo ? withTypes.video : withTypes.text
+  })
+}
+
+/** 选择集话术:已选 N / 共 M 篇。 */
+export function pickSummary(picked: number, total: number): string {
+  return `已选 ${picked} / ${total} 篇`
+}
+
 /** 组装行:标题回退 url,类型标签映射,主键或归一化 URL 命中即已存档。 */
 export function buildSyncRows(
   refs: SyncRowInput[],
