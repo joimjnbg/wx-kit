@@ -544,6 +544,41 @@ async function main() {
     const tipText = await win.locator('.ant-tooltip-container').innerText()
     assert(tipText.includes('dreamble'), `site-sync tooltip mentions the dreamble repo (saw: ${tipText.slice(0, 40)})`)
 
+    // ============ GUI-04 同步选下页:开关/勾选/计算集/下载贯通 ============
+    await win.click('[data-testid="nav-同步选下"]')
+    await win.waitForSelector('[data-testid="sync-page"]', { timeout: 8000 })
+    assert((await win.locator('[data-testid="sync-seed-input"]').count()) === 1, 'sync page shows seed input')
+    assert((await win.locator('[data-testid="sync-account-select"]').count()) === 1, 'sync page shows account selector')
+    // 用订阅页已沉淀的账号做同步入口(免重复走 mp:search):选号 → 同步 → 待处理行
+    await pickSelect('sync-account-select', '微信读书测试订阅号')
+    await win.click('[data-testid="sync-run"]')
+    await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
+    const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
+    assert(rowCount >= 1, `sync yields pending rows (got ${rowCount})`)
+    // 开关翻转批量:关掉图文只剩视频(cover 单篇为图文,全关则空集)
+    const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
+    const before = await countText()
+    await win.locator('[data-testid="sync-type-text"]').click()
+    await win.waitForTimeout(200)
+    const afterOff = await countText()
+    assert(before !== afterOff, `text toggle flips computed set (${before} -> ${afterOff})`)
+    await win.locator('[data-testid="sync-type-text"]').click()
+    await win.waitForTimeout(200)
+    assert((await countText()) === before, 'text toggle back restores computed set')
+    // 单篇勾选覆盖:取消第一行勾选,计算集减一
+    await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
+    await win.waitForTimeout(200)
+    assert((await countText()) !== before, 'unchecking a row shrinks computed set')
+    await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
+    await win.waitForTimeout(200)
+    assert((await countText()) === before, 're-checking restores computed set')
+    // 下载贯通:计算集下载落 content.md + meta.json
+    await win.click('[data-testid="sync-download"]')
+    await win.waitForSelector('[data-testid="sync-dl-progress"], .ant-message-notice', { timeout: 60000 })
+    await win.waitForTimeout(3000)
+    const libFiles = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
+    assert(libFiles.length >= 1, `sync download lands library rows (got ${libFiles.length})`)
+
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)
 
