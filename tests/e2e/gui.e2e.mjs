@@ -240,6 +240,17 @@ async function main() {
     const tabMissing = (await win.locator('[data-testid="mowen-tab-missing"]').count()) === 1
     assert(tabMissing || (await win.locator('[data-testid="mowen-tab-error"]').count()) === 0,
       'M61: mowen tab renders either the mocli-missing guide or a clean search state')
+    // M65:搜索模式 Segmented（按用户/按关键词）——切换只换 placeholder 与按钮文案，
+    // 输入框位置不动；搜索行为本身走真机验收（mocli 外部二进制不进 mock e2e）
+    assert((await win.locator('[data-testid="mowen-mode-seg"]').count()) === 1, 'M65: mowen mode segmented present')
+    await win.locator('[data-testid="mowen-mode-seg"] .ant-segmented-item:has-text("按关键词")').click()
+    await win.waitForTimeout(200)
+    let ph = await win.locator('[data-testid="mowen-search-input"] input').getAttribute('placeholder')
+    assert(ph === '按关键词搜索全站墨问笔记', `M65: keyword mode placeholder (saw: ${ph})`)
+    await win.locator('[data-testid="mowen-mode-seg"] .ant-segmented-item:has-text("按用户")').click()
+    await win.waitForTimeout(200)
+    ph = await win.locator('[data-testid="mowen-search-input"] input').getAttribute('placeholder')
+    assert(ph === '按用户名/简介模糊搜索墨问用户', `M65: switch back to user mode restores placeholder (saw: ${ph})`)
     await win.locator('.ant-segmented-item:has-text("按链接下载")').click()
     await win.waitForSelector('[data-testid="start-download"]', { timeout: 5000 })
     await win.fill('[data-testid="url-input"]', [urlOf('a1'), urlOf('a2'), urlOf('a3')].join('\n'))
