@@ -584,7 +584,7 @@ async function main() {
     }, undefined, { timeout: 5000 })
     assert(true, 'text toggle flips off (explicit checks keep rows picked)')
     // waitForFunction 在 Windows 打包应用里偶发 poll 丢失:改用轮询断言,行为等价
-    const waitCount = async (want: string | null, label: string) => {
+    const waitCount = async (want, label) => {
       for (let i = 0; i < 25; i++) {
         const cur = await countText()
         if (want === null ? cur !== before : cur === want) { assert(true, label); return cur }
