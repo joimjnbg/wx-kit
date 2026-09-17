@@ -571,19 +571,11 @@ async function main() {
     await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
     const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
     assert(rowCount >= 1, `sync yields pending rows (got ${rowCount})`)
-    // 开关语义:首轮行默认全选即已 touched(显式选择优先于开关),故关 text 后行仍选中、
-    // 计算集不变才是正确行为。antd 把 data-testid 放在 label 上,状态看 wrapper-checked 类。
+    // 开关行为:关 text 后该类行取消勾选(显式勾选保留),计算集收缩;打开恢复。
+    // 首轮行默认全选走开关默认值(未 touched),故关 text 直接收缩 —— 无需 touched 特例。
     const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
     const before = await countText()
-    const toggleOn = () => win.locator('[data-testid="sync-type-text"].ant-checkbox-wrapper-checked').count()
-    assert(await toggleOn() === 1, 'text toggle starts checked')
-    await win.locator('[data-testid="sync-type-text"]').click()
-    await win.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="sync-type-text"]')
-      return el && !el.className.includes('ant-checkbox-wrapper-checked')
-    }, undefined, { timeout: 5000 })
-    assert(true, 'text toggle flips off (explicit checks keep rows picked)')
-    // waitForFunction 在 Windows 打包应用里偶发 poll 丢失:改用轮询断言,行为等价
+    // waitForFunction 在 Windows 打包应用里偶发 poll 丢失:轮询断言,行为等价
     const waitCount = async (want, label) => {
       for (let i = 0; i < 25; i++) {
         const cur = await countText()
@@ -594,7 +586,9 @@ async function main() {
       return before
     }
     await win.locator('[data-testid="sync-type-text"]').click()
-    await waitCount(before, 'text toggle back keeps computed set')
+    await waitCount(null, 'text toggle off shrinks computed set')
+    await win.locator('[data-testid="sync-type-text"]').click()
+    await waitCount(before, 'text toggle back restores computed set')
     // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复(同上轮询,免 waitForFunction)
     await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
     await waitCount(null, 'unchecking a row shrinks computed set')
