@@ -551,14 +551,15 @@ async function main() {
     assert((await win.locator('[data-testid="sync-account-select"]').count()) === 1, 'sync page shows account selector')
     // 用订阅页已沉淀的账号做同步入口(免重复走 mp:search):选号 → 同步 → 待处理行
     // 账号名为 fixture cover 的 name(订阅 checks 共用同一数据源),用既有 pickSelect 助手。
-    // 注意:订阅页前文已跑过 checkNow,cover 身份游标已推进,此处同步预期 0 新行 ——
-    // 用 M58 种子逻辑补一篇待处理(与订阅页 M58 段同构),保证行列表非空可断言。
+    // 注意:订阅页前文已跑过 checkNow,cover 身份游标已推进 —— 此处同步用种子 URL
+    // 直接解析下载(种子是 fixture 文章 a1,webRequest 重定向到本地),不依赖游标出新行。
+    // 为保证行列表非空可断言,仍按 M58 段同构补一篇待处理展示行;下载走种子 URL。
     {
       const subSync = JSON.parse(readFileSync(join(libraryRoot, 'subscriptions.json'), 'utf8'))
       const accSync = subSync.accounts.find((a) => a.subscribed)
       assert(!!accSync, 'sync e2e: seeded subscribed account exists')
       accSync.newRefs = [{
-        url: `https://mp.weixin.qq.com/s/E2ESYNC`,
+        url: urlOf('a1'),
         title: '同步选下行',
         createTime: Math.floor(Date.now() / 1000),
         sourceId: 'e2e-sync-seed',
