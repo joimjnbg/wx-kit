@@ -122,6 +122,10 @@
       卡片 `blockquote.mowen-ref-card` / 标题 / 作者 / 旧尾部块退场 / md 落盘不丢标题。
       mock 经 `WXKIT_MOWEN_BASE` 注入（note/show 走 Node fetch，webRequest 拦不到），
       入口走「按链接下载」tab（不经 mocli）。
+- [x] **图集缺图补拉（安哥实测发现的真缺陷，2026-09-17 修复）**：`note/show` 图片池对图集
+      不保证完整，池缺映射时补调 `gallery/infos`（`{noteUuid, gids}`，匿名，墨问网页端同款
+      两段式）合并；失败退回缺图告警不炸笔记。真机验收 3/3 落盘；e2e 断言「图集 3 张图全
+      落盘（池 2 + gallery/infos 补 1）」。
 
 ### R2
 

@@ -33,13 +33,36 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 /** note/show 端点。`WXKIT_MOWEN_BASE` 仅供 e2e 把请求指到本地 mock（默认生产域名）。
  *  这里只能用 env 换 base、不能用 Electron 的 webRequest 拦截——本请求走 Node 的 fetch
  *  （defaultFetchJson），不经 Chromium 会话，拦不到。 */
-function showUrl(): string {
+function mowenUrl(path: string): string {
   const base = (process.env.WXKIT_MOWEN_BASE ?? 'https://note.mowen.cn').replace(/\/$/, '')
-  return `${base}/api/note/wxa/v1/note/show`
+  return `${base}${path}`
+}
+
+/** note/show 的图片池对**图集不保证完整**（真机 2026-09-17：图集声明 3 张、池只给 2 张，
+ *  被引子笔记 6ipCTiFtt0yQRXNeSDA1w 实录）。墨问网页端的补法是第二个匿名接口
+ *  gallery/infos，POST {noteUuid, gids}，返回 {gids, gallerys, images}——缺的那张的
+ *  URL（含 scale.w_1200）在这里。本函数在池缺图时按同款协议补拉。 */
+async function fetchGalleryInfos(uuid: string, gids: string[], deps: NoteShowDeps): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const res = await deps.fetchJson(mowenUrl('/api/note/wxa/v1/gallery/infos'), {
+    method: 'POST',
+    body: JSON.stringify({ noteUuid: uuid, gids }),
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (res.status !== 200) throw new Error(`gallery/infos HTTP ${res.status}`)
+  const json: unknown = JSON.parse(res.text)
+  const images = isObj(json) && isObj(json.images) ? json.images : {}
+  for (const [k, v] of Object.entries(images)) {
+    if (!isObj(v)) continue
+    const scale = isObj(v.scale) ? v.scale : {}
+    const url = str(scale.w_1200) || str(v.url)
+    if (url) out.set(k, url)
+  }
+  return out
 }
 
 export async function fetchNoteShow(uuid: string, deps: NoteShowDeps): Promise<NoteShowResult> {
-  const res = await deps.fetchJson(showUrl(), {
+  const res = await deps.fetchJson(mowenUrl('/api/note/wxa/v1/note/show'), {
     method: 'POST',
     body: JSON.stringify({ uuid }),
     headers: { 'Content-Type': 'application/json' },
@@ -80,6 +103,16 @@ export async function fetchNoteShow(uuid: string, deps: NoteShowDeps): Promise<N
   for (const [gid, g] of Object.entries(gallerys)) {
     if (!isObj(g) || !Array.isArray(g.fileUuids)) continue
     galleries.set(gid, g.fileUuids.map(str).filter(Boolean))
+  }
+  // 图集池缺图 → gallery/infos 补拉（墨问网页端同款两段式；失败退回缺图告警，不炸笔记）
+  const galleryMissing = [...galleries.values()].flat().some((f) => !images.has(f))
+  if (galleries.size > 0 && galleryMissing) {
+    try {
+      const extra = await fetchGalleryInfos(uuid, [...galleries.keys()], deps)
+      for (const [k, url] of extra) images.set(k, url)
+    } catch {
+      warnings.push('图集图片补拉失败（gallery/infos），缺图未下载')
+    }
   }
   const contentHtml = str(noteBase.content).replace(
     /<gallery\s+uuid="([^"]+)"\s*>\s*<\/gallery>/g,

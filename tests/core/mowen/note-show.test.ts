@@ -65,6 +65,19 @@ const galleryBody = JSON.stringify({
 
 const paidBody = JSON.stringify({ code: 400, reason: 'ASSET_NOT_FOUND', message: 'asset not found', metadata: { skuId: '2056619449635758081' } })
 
+const GALLERY_INFOS_URL = 'https://note.mowen.cn/api/note/wxa/v1/gallery/infos'
+// 真机 2026-09-17 钉死：note/show 的 noteFile.images 池对图集**不保证完整**（本样本
+// 3 声明 2 给出），墨问网页端靠第二个匿名接口 gallery/infos（{noteUuid, gids}）补齐。
+const galleryInfosBody = JSON.stringify({
+  gids: ['T07Gx8UIZ_LYpekTbip_s'],
+  gallerys: { T07Gx8UIZ_LYpekTbip_s: { gid: 'T07Gx8UIZ_LYpekTbip_s', fileUuids: ['c2ifY_y93bc3gqtA6stE-', 'X0VmI0uXnqncojo0aJUy4', 'cL57P7QSnYHwKtNAh4_sn'] } },
+  images: {
+    'c2ifY_y93bc3gqtA6stE-': { url: 'https://x/orig-1.png', scale: { w_1200: 'https://x/w1200-1.png' } },
+    'X0VmI0uXnqncojo0aJUy4': { url: 'https://x/orig-2.png', scale: { w_1200: 'https://x/w1200-2.png' } },
+    'cL57P7QSnYHwKtNAh4_sn': { url: 'https://x/orig-3.png', scale: { w_1200: 'https://x/w1200-3.png' } },
+  },
+})
+
 type FetchJson = (url: string, init: { method: 'POST'; body: string; headers: Record<string, string> }) => Promise<{ status: number; text: string }>
 const ok = (text: string, status = 200): FetchJson => async (url, init) => {
   expect(url).toBe(SHOW_URL)
@@ -86,23 +99,60 @@ describe('fetchNoteShow', () => {
     expect(r.warnings.some((w) => w.includes('MISSING-UUID-123456789'))).toBe(true)
   })
 
-  it('图集：<gallery uuid> 按noteGallery.fileUuids 顺序展开为 img uuid 序列，缺图进 warning', async () => {
-    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', { fetchJson: async () => ({ status: 200, text: galleryBody }) })
+  it('图集：<gallery uuid> 按noteGallery.fileUuids 顺序展开为 img uuid 序列；池齐全时不额外请求', async () => {
+    const calls: string[] = []
+    const complete = JSON.parse(galleryBody)
+    complete.detail.noteFile.images['cL57P7QSnYHwKtNAh4_sn'] = { url: 'https://x/orig-3.png', scale: { w_1200: 'https://x/w1200-3.png' } }
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', {
+      fetchJson: async (url) => { calls.push(url); return { status: 200, text: JSON.stringify(complete) } },
+    })
     // gallery 占位标签被展开，不再残留
     expect(r.contentHtml).not.toContain('<gallery')
-    // 展开顺序与 fileUuids 一致（真机顺序：c2ifY → X0VmI → 缺失的 cL57P）
+    // 展开顺序与 fileUuids 一致（真机顺序：c2ifY → X0VmI → cL57P）
     expect(r.contentHtml).toContain('<img uuid="c2ifY_y93bc3gqtA6stE-"><img uuid="X0VmI0uXnqncojo0aJUy4"><img uuid="cL57P7QSnYHwKtNAh4_sn">')
-    // 池里缺失的图走既有「映射缺失」warning，不静默
-    expect(r.warnings.some((w) => w.includes('cL57P7QSnYHwKtNAh4_sn'))).toBe(true)
+    // 池齐全 → 无缺图告警，也无需补拉
+    expect(r.warnings.some((w) => w.includes('cL57P7QSnYHwKtNAh4_sn'))).toBe(false)
+    expect(calls).toEqual([SHOW_URL])
   })
 
-  it('图集 gid 无定义（被删/接口异常）→ warning + 原标签保留，不炸', async () => {
+  it('图集缺图：note/show 池不全 → 补调 gallery/infos({noteUuid,gids}) 合并缺失映射（真机 2026-09-17 钉死）', async () => {
+    const calls: Array<{ url: string; body: unknown }> = []
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', {
+      fetchJson: async (url, init) => {
+        calls.push({ url, body: JSON.parse(init.body) })
+        if (url === GALLERY_INFOS_URL) return { status: 200, text: galleryInfosBody }
+        return { status: 200, text: galleryBody }
+      },
+    })
+    // 第二次请求按墨问网页端同款协议补拉
+    expect(calls[1]?.url).toBe(GALLERY_INFOS_URL)
+    expect(calls[1]?.body).toEqual({ noteUuid: '6ipCTiFtt0yQRXNeSDA1w', gids: ['T07Gx8UIZ_LYpekTbip_s'] })
+    // 三张图都有映射（第三张来自 gallery/infos），不再有缺图告警
+    expect(r.images.size).toBe(3)
+    expect(r.images.get('cL57P7QSnYHwKtNAh4_sn')).toBe('https://x/w1200-3.png')
+    expect(r.warnings.some((w) => w.includes('图片映射缺失'))).toBe(false)
+  })
+
+  it('图集缺图但 gallery/infos 失败：图片照旧进缺图告警，笔记不失败', async () => {
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', {
+      fetchJson: async (url) => (url === GALLERY_INFOS_URL ? { status: 500, text: 'boom' } : { status: 200, text: galleryBody }),
+    })
+    expect(r.images.size).toBe(2)
+    expect(r.warnings.some((w) => w.includes('cL57P7QSnYHwKtNAh4_sn'))).toBe(true)
+    expect(r.warnings.some((w) => w.includes('图集图片补拉失败'))).toBe(true)
+  })
+
+  it('图集 gid 无定义（被删/接口异常）→ warning + 原标签保留，不炸；无 gid 也不触发补拉', async () => {
     const galleryObj = JSON.parse(galleryBody)
     galleryObj.detail.noteGallery = { gids: [], gallerys: {} }
     const broken = JSON.stringify(galleryObj)
-    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', { fetchJson: async () => ({ status: 200, text: broken }) })
+    const calls: string[] = []
+    const r = await fetchNoteShow('6ipCTiFtt0yQRXNeSDA1w', {
+      fetchJson: async (url) => { calls.push(url); return { status: 200, text: broken } },
+    })
     expect(r.contentHtml).toContain('<gallery uuid="T07Gx8UIZ_LYpekTbip_s">')
     expect(r.warnings.some((w) => w.includes('图集定义缺失') && w.includes('T07Gx8UIZ_LYpekTbip_s'))).toBe(true)
+    expect(calls).toEqual([SHOW_URL])   // 没有图集定义就没有补拉
   })
 
   it('publicAt 是字符串形态（真机实测 "1789088785"）也能解析', async () => {
