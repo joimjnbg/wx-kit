@@ -575,12 +575,12 @@ async function main() {
     // 计算集不变才是正确行为。此处断言开关受控翻转本身,再用单篇取消验证计算集收缩。
     const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
     const before = await countText()
-    await win.locator('[data-testid="sync-type-text"] input').click()
+    await win.locator('[data-testid="sync-type-text"] .ant-checkbox-input').click()
     await win.waitForFunction(
       () => document.querySelector('[data-testid="sync-type-text"]')?.className.includes('ant-checkbox-checked') === false,
       undefined, { timeout: 5000 })
     assert(true, 'text toggle flips off (explicit checks keep rows picked)')
-    await win.locator('[data-testid="sync-type-text"] input').click()
+    await win.locator('[data-testid="sync-type-text"] .ant-checkbox-input').click()
     await win.waitForFunction(
       () => document.querySelector('[data-testid="sync-type-text"]')?.className.includes('ant-checkbox-checked') === true,
       undefined, { timeout: 5000 })
