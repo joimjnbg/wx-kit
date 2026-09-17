@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, Input, List, Select, Spin, Tag, message } from 'antd'
 import { api, type MpSessionInfo, type SubscribedAccount } from '../api'
 import { sessionHint } from '../sync-view'
-import { buildSyncRows, type SyncRow } from '../sync-rows'
+import { buildSyncRows, mergeSyncRows, type SyncRow } from '../sync-rows'
 
 // 同步页(票据 02a):Seed URL 确认账号或已选订阅账号 → 待处理行 + 已存档标记。
 // 选择器与下载接线见后续票据;本页负责入口、行列表与登录态。
@@ -18,6 +18,9 @@ export default function Sync() {
   const [rows, setRows] = useState<SyncRow[]>([])
   const [syncing, setSyncing] = useState(false)
   const [confirmed, setConfirmed] = useState<{ fakeid: string; nickname: string } | null>(null)
+  // 选择器状态(03 票据落 UI 复选框):单篇勾选 refId 集,重同步时合并保留
+  // checked 为空且 rows 非空 = 用户清空了选择(与"尚未选择"区分,靠行存在性判断)
+  const [_checked, setChecked] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let alive = true
@@ -65,7 +68,15 @@ export default function Sync() {
       // 已存档交叉:主键 mid_idx 优先(URL 形态会变),回退归一化 URL
       const archivedIds = new Set(lib.map((m) => m.id))
       const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
-      setRows(buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls }))
+      const next = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      // 重同步合并(并集):同 refId 用新行替换(archived 刷新),旧独有行保留,按时间重排
+      const isFirst = rows.length === 0
+      setRows((prev) => mergeSyncRows(prev, next))
+      setChecked((prev) => {
+        const kept = new Set(prev)
+        if (isFirst && prev.size === 0) for (const n of next) kept.add(n.refId)
+        return kept
+      })
     } finally {
       setSyncing(false)
     }

@@ -4,20 +4,22 @@
 // 类型映射与 core/message-kind.kindTag 同构(渲染层禁引 core,故此处复述最小映射);
 // 若 message-kind 新增类型,此处需同步跟进(测试钉住视频/图片/未知三档)。
 
-/** 行组装输入:订阅待处理条目的最小展示子集(含主键,身份稳定)。 */
+/** 行组装输入:订阅待处理条目的最小展示子集(含主键与时间,身份与排序稳定)。 */
 export interface SyncRowInput {
   url: string
   title: string
+  createTime: number
   itemShowType?: number | null
   appmsgid?: number
   itemidx?: number
 }
 
-/** 组装后的行:稳定 refId、标题/类型标签/已存档标记。 */
+/** 组装后的行:稳定 refId、标题/类型标签/已存档标记,保留时间供排序。 */
 export interface SyncRow {
   refId: string
   url: string
   title: string
+  createTime: number
   kindLabel: string | null
   kindWarn: boolean
   archived: boolean
@@ -62,9 +64,20 @@ export function buildSyncRows(
       refId: id,
       url: r.url,
       title: r.title.trim() || r.url,
+      createTime: r.createTime,
       kindLabel: k.label,
       kindWarn: k.warn,
       archived: archived.archivedIds.has(id) || urlSet.has(urlKey(r.url)),
     }
-  })
+  }).sort((a, b) => b.createTime - a.createTime)
+}
+
+/** 重同步合并(并集合并):新行整体替换同 refId 旧行(archived 等标记刷新),
+ * 不在新集中的旧行保留(不静默丢),顺序按时间重排,与文库一致。 */
+export function mergeSyncRows(prev: SyncRow[], next: SyncRow[]): SyncRow[] {
+  const byId = new Map(next.map((n) => [n.refId, n] as const))
+  const kept = prev.map((r) => byId.get(r.refId) ?? r)
+  const prevIds = new Set(prev.map((r) => r.refId))
+  const fresh = next.filter((n) => !prevIds.has(n.refId))
+  return [...kept, ...fresh].sort((a, b) => b.createTime - a.createTime)
 }
