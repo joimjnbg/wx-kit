@@ -8,6 +8,7 @@ import CliLinkPrompt from '../components/CliLinkPrompt'
 const NAV = [
   { to: '/', label: '下载', end: true },
   { to: '/subscriptions', label: '订阅', end: false },
+  { to: '/sync', label: '同步选下', end: false },
   { to: '/library', label: '文库', end: false },
   { to: '/settings', label: '设置', end: false },
 ]
