@@ -550,11 +550,8 @@ async function main() {
     assert((await win.locator('[data-testid="sync-seed-input"]').count()) === 1, 'sync page shows seed input')
     assert((await win.locator('[data-testid="sync-account-select"]').count()) === 1, 'sync page shows account selector')
     // 用订阅页已沉淀的账号做同步入口(免重复走 mp:search):选号 → 同步 → 待处理行
-    // 注意:runSync 先 checkNow(cover 游标推进,0 新行)再读 subscriptionsList ——
-    // 种子必须在 checkNow 之后写,否则被检查覆盖掉。此处先选号同步(行空),再种子+重同步。
-    await pickSelect('sync-account-select', '测试订阅号')
-    await win.click('[data-testid="sync-run"]')
-    await win.waitForTimeout(3000)
+    // 注意:runSync 读 subscriptionsList 的 newRefs —— checkNow 0 新行时不碰 newRefs,
+    // 故种子在同步前写一次即可(检查只合并,不覆盖)。种子 URL 用 fixture a1(可下载)。
     {
       const subSync = JSON.parse(readFileSync(join(libraryRoot, 'subscriptions.json'), 'utf8'))
       const accSync = subSync.accounts.find((a) => a.subscribed)
@@ -568,6 +565,7 @@ async function main() {
       }]
       writeFileSync(join(libraryRoot, 'subscriptions.json'), JSON.stringify(subSync))
     }
+    await pickSelect('sync-account-select', '测试订阅号')
     await win.click('[data-testid="sync-run"]')
     await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
     const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
