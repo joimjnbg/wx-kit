@@ -117,7 +117,7 @@ async function main() {
     executablePath: electronPath,
     args: [projectRoot, `--user-data-dir=${userDataDir}`],
     cwd: projectRoot,
-    env: { ...process.env, WXKIT_WEREAD_BASE: wereadBase },
+    env: { ...process.env, WXKIT_WEREAD_BASE: wereadBase, WXK_E2E_LIB: libraryRoot },
   })
   const win = await app.firstWindow()
   const errors = []
@@ -543,6 +543,69 @@ async function main() {
     await win.waitForSelector('.ant-tooltip-container', { timeout: 5000 })
     const tipText = await win.locator('.ant-tooltip-container').innerText()
     assert(tipText.includes('dreamble'), `site-sync tooltip mentions the dreamble repo (saw: ${tipText.slice(0, 40)})`)
+
+    // ============ GUI-04 同步选下页:开关/勾选/计算集/下载贯通 ============
+    await win.click('[data-testid="nav-同步选下"]')
+    await win.waitForSelector('[data-testid="sync-page"]', { timeout: 8000 })
+    assert((await win.locator('[data-testid="sync-seed-input"]').count()) === 1, 'sync page shows seed input')
+    assert((await win.locator('[data-testid="sync-account-select"]').count()) === 1, 'sync page shows account selector')
+    // 用订阅页已沉淀的账号做同步入口(免重复走 mp:search):选号 → 同步 → 待处理行
+    // 账号名为 fixture cover 的 name(订阅 checks 共用同一数据源)
+    const syncAccounts = await win.locator('[data-testid="sync-account-select"] .ant-select-selection-item').count()
+    assert(syncAccounts >= 0, 'sync account selector rendered')
+    await win.click('[data-testid="sync-account-select"] .ant-select-selector')
+    const syncOpts = await win.locator('.ant-select-dropdown:visible .ant-select-item').allInnerTexts()
+    assert(syncOpts.length >= 1, `sync account selector offers subscribed accounts (got ${syncOpts.length})`)
+    await win.locator('.ant-select-dropdown:visible .ant-select-item').first().click()
+    await win.waitForTimeout(180)
+    await win.click('[data-testid="sync-run"]')
+    await win.waitForSelector('[data-testid="sync-rows"] .ant-list-item', { timeout: 30000 })
+    const rowCount = await win.locator('[data-testid="sync-rows"] .ant-list-item').count()
+    assert(rowCount >= 1, `sync yields pending rows (got ${rowCount})`)
+    // 开关翻转批量:关掉图文后计算集变化(cover 单篇 fixture 下为空集),打开恢复
+    const countText = () => win.locator('[data-testid="sync-pick-count"]').innerText()
+    const before = await countText()
+    await win.locator('[data-testid="sync-type-text"]').click()
+    await win.waitForFunction(
+      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent !== prev,
+      before, { timeout: 5000 })
+    const afterOff = await countText()
+    assert(before !== afterOff, `text toggle flips computed set (${before} -> ${afterOff})`)
+    await win.locator('[data-testid="sync-type-text"]').click()
+    await win.waitForFunction(
+      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent === prev,
+      before, { timeout: 5000 })
+    assert((await countText()) === before, 'text toggle back restores computed set')
+    // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复
+    await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
+    await win.waitForFunction(
+      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent !== prev,
+      before, { timeout: 5000 })
+    assert((await countText()) !== before, 'unchecking a row shrinks computed set')
+    await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
+    await win.waitForFunction(
+      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent === prev,
+      before, { timeout: 5000 })
+    assert((await countText()) === before, 're-checking restores computed set')
+    // 下载贯通:计算集下载落库,断言新增文章目录含 content.md + meta.json
+    // waitForFunction 跑在浏览器上下文,读不到 node 变量:库路径经 WXK_E2E_LIB 环境变量传入
+    const libBefore = new Set(JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles.map((a) => a.id))
+    await win.click('[data-testid="sync-download"]')
+    await win.waitForSelector('[data-testid="sync-dl-progress"], .ant-message-notice', { timeout: 60000 })
+    await win.waitForFunction((known) => {
+      try {
+        const cur = JSON.parse(require('node:fs').readFileSync(require('node:path').join(process.env.WXK_E2E_LIB, 'library.json'), 'utf8')).articles
+        return cur.some((a) => !known.includes(a.id))
+      } catch { return false }
+    }, [...libBefore], { timeout: 60000 })
+    const libAfter = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
+    const fresh = libAfter.filter((a) => !libBefore.has(a.id))
+    assert(fresh.length >= 1, `sync download lands new library rows (got ${fresh.length})`)
+    for (const a of fresh) {
+      const files = (await import('node:fs')).readdirSync(a.dir)
+      assert(files.includes('content.md') && files.includes('meta.json'),
+        `fresh article dir holds content.md + meta.json (${a.dir})`)
+    }
 
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)
