@@ -264,4 +264,24 @@ describe('downloadMowenNote · 引用元信息与请求缓存（v0.11.2 R1）', 
     expect(at.length).toBe(2)
     expect(at[1]! - at[0]!).toBeGreaterThanOrEqual(480)   // 计时器容差
   })
+
+  it('限速跨调用生效：批量下载逐篇新建 deps 时，篇与篇之间仍隔 500ms（模块级共享闸）', async () => {
+    // 复现调用方真实形态：DownloadQueue 的 mapper 每篇 URL 都新建 deps 字面量
+    // （GUI `ipc.ts` 写 `{...deps, onVideoProgress}`、CLI `mowen import` 写内联字面量），
+    // 所以 per-deps 闸会在每篇开头重置——本用例钉死「上提为模块级」后的跨篇行为。
+    const noteA = 'Ni2ZIpWVBtm1qu8sAmihb'
+    const noteB = 'AbCdEfGhIjKlMnOpQrStu'
+    const first = spyDeps(new Map([[noteA, noteShowOf({ uuid: noteA, title: '甲' })]]))
+    const second = spyDeps(new Map([[noteB, noteShowOf({ uuid: noteB, title: '乙' })]]))
+    delete (first.deps as { minIntervalMs?: number }).minIntervalMs
+    delete (second.deps as { minIntervalMs?: number }).minIntervalMs
+
+    await downloadMowenNote(noteA, ['meta'], first.deps)
+    await downloadMowenNote(noteB, ['meta'], second.deps)
+
+    expect(first.at.length).toBe(1)
+    expect(second.at.length).toBe(1)
+    // 不同 deps 实例之间也要满足间隔——这正是 per-deps 闸漏掉的那半
+    expect(second.at[0]! - first.at[0]!).toBeGreaterThanOrEqual(480)
+  })
 })

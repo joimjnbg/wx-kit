@@ -1503,3 +1503,40 @@ expandRefs 子下载三处共用——同一 uuid 全程只发一次请求。关
 正文有标签但不在清单的（防御）failed 卡 + warning。真机验收：CatBar 0.7 笔记 md 落盘
 `> [《发布第一款 Mac App：CatBar…》](url) · 池建强` + 摘要，html 见卡片，父笔记仅
 2 次请求（父 + 元信息）。78 墨问单测全绿，全量 689。
+
+## §59 M64 收尾：跨篇限速，以及「e2e 到底覆盖了什么」（2026-09-17）
+
+**起因是安哥一句「你有跑 e2e 吗」**——没有。M64 我只跑了单测/lint/tsc + 真机 CLI 验收，
+GUI e2e 跳过了。补跑后全绿，但这次真正的收获不是那个绿，而是发现**绿得没有意义**：
+`gui.e2e.mjs` 里墨问相关的断言只有三条入口存在性（tab 渲染、mocli 检测两种状态、订阅页
+墨问面板），**M64 的产物（引用卡片）在这个套件里零覆盖**；`gui-live-download.e2e.mjs` 只跑
+微信文章。所以那次全绿只能证明「GUI 没被 M64 的 deps 结构变更搞坏」，证明不了引用卡片能
+渲染。**「有测试」和「被测到」是两件事**——套件里出现墨问字样，不等于墨问链路被测过。
+
+**给墨问下载补 e2e 时撞到两道墙，都是结构性的**：
+
+① **下载入口依赖 mocli**。墨问 tab 的下载路径是「搜用户 → 清单 → 勾选 → 下载」，搜索走
+mocli 这个外部二进制——隔离环境里有没有不定，不能进 e2e。绕法是发现**「按链接下载」tab
+本来就通**：`UrlMode` 无 URL 校验，`downloadArticle` 在一切微信逻辑之前先做墨问路由
+（`extractMowenNoteId(url)` → `downloadMowenNote`），所以粘 `note.mowen.cn/detail/<id>`
+就能下，**完全不经 mocli**。这条路径此前没人从 GUI 侧走过（CLI 一直能走），补 e2e 时才
+发现它一直都在。
+
+② **note/show 拦不到**。它走 Node 的 `fetch`（undici），不经 Chromium 会话，
+Electron 的 `webRequest.onBeforeRequest` 对它无效——而微信读书那套 mock 正是靠 webRequest
+重定向的。所以墨问只能**换 base**：给 `note-show.ts` 加 `WXKIT_MOWEN_BASE`（对齐既有
+`WXKIT_WEREAD_BASE` 先例，默认生产域名）。**教训：mock 手段取决于请求走哪条网络栈**，
+同一个 e2e 里两条链路要用两种拦法，别指望一套 mock 通吃。
+
+**顺手修掉一个 M64 残留**：限速闸当时挂在 deps 实例上（`WeakMap<deps, number>`），而
+GUI 的 queue mapper 写 `{...deps, onVideoProgress}`、CLI `mowen import` 的 mapper 写内联
+字面量——**每篇 URL 都新建 deps**，闸于是在每篇开头重置，「笔记间隔 0.5s」跨篇形同虚设
+（单次调用内的间隔倒是真的，所以 M64 的单测没暴露）。上提为模块级 `lastNoteShowAt` 后，
+同进程内所有 note/show 共用一个闸；GUI 手动连点两篇也会隔 500ms——这正是 PRD 那句
+「温和请求保通道」想要的语义。新测试专门复现调用方形态（两个独立 deps 字面量、两篇
+笔记），断言**跨 deps 实例**的间隔 ≥ 500ms，把「per-deps 闸」这个 bug 钉进回归。
+
+**新增 e2e 用例的 6 条断言**（父+子两次请求的夹具）：墨问链接经「按链接下载」入库 →
+阅读器 iframe 里 `blockquote.mowen-ref-card` 存在 → 卡片带子笔记标题《…》 → 带作者 →
+旧尾部块不再出现（`引用笔记（` 不应命中） → 落盘 content.md 的引用块带标题（turndown
+不丢）。690 单测 + e2e 全绿。

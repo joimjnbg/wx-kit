@@ -11,10 +11,16 @@
 //   - 文章页 fetch 走 persist:mpweixin 会话，用 webRequest 把 mp.weixin.qq.com/s/SUBTOKEN
 //     重定向回 fixture，使「取最新一篇 → 抓正文」整条链路封闭、不碰真实网络。
 //
+// 墨问 note/show 同样 mock（M64 起覆盖「下载 → 阅读器引用卡片」）：
+//   - WXKIT_MOWEN_BASE 把 note/show 指到 fixture server。该请求走 Node 的 fetch，
+//     不经 Chromium 会话，webRequest 拦不到，只能换 base。
+//   - 下载入口走「按链接下载」tab 粘 note.mowen.cn/detail/<id>（download-article 路由到
+//     墨问分支），**不经过 mocli**——mocli 是外部二进制，隔离环境里有无不定，不能进 e2e。
+//
 // Run: npx vite build && node tests/e2e/gui.e2e.mjs   (or: npm run test:e2e)
 import { _electron as electron } from 'playwright'
 import http from 'node:http'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -46,6 +52,37 @@ const WEREAD_TOKEN = 'SUBTOKEN'              // reviewId 末段 → 文章短链
 // 再靠 persist:mpweixin 会话上的 webRequest 重定向回 fixture 封闭链路。
 const MP_ARTICLE_URL = `https://mp.weixin.qq.com/s/${WEREAD_TOKEN}`
 
+// 墨问夹具：父笔记正文里的引用块是 `<note uuid>` 纯占位标签（真机形态，正文本身不带标题），
+// 标题得靠对被引用 uuid 再发一次 note/show 拉回来——v0.11.2 R1 的引用卡片就是这么来的。
+// 子笔记元信息独立成条，用来同时验「卡片有标题」与「父子各一次请求」。
+const MOWEN_PARENT = 'MowenParent0000000001'
+const MOWEN_CHILD = 'MowenChild00000000002'
+const MOWEN_NOTES = {
+  [MOWEN_PARENT]: {
+    detail: {
+      noteBase: {
+        uuid: MOWEN_PARENT, title: '墨问父笔记', digest: '父笔记摘要',
+        content: `<p>父笔记正文。</p><p>关联阅读：</p><note uuid="${MOWEN_CHILD}"></note>`,
+        publicAt: 1789088785,
+      },
+      noteFile: null,
+      noteRef: [MOWEN_CHILD],
+    },
+    user: { base: { uid: 'u-mowen-1', name: '墨问父作者' } },
+  },
+  [MOWEN_CHILD]: {
+    detail: {
+      noteBase: {
+        uuid: MOWEN_CHILD, title: '子笔记标题甲', digest: '子笔记摘要乙',
+        content: '<p>子笔记正文。</p>', publicAt: 1789000000,
+      },
+      noteFile: null,
+      noteRef: [],
+    },
+    user: { base: { uid: 'u-mowen-2', name: '子笔记作者丙' } },
+  },
+}
+
 function makeHtml(port, art) {
   const titleTag = art.title ? `<h1 class="rich_media_title" id="activity-name">${art.title}</h1>` : ''
   const vars = (art.biz || art.mid || art.idx)
@@ -69,14 +106,25 @@ ${vars}
 const log = (...a) => console.log('[e2e]', ...a)
 let failed = false
 const assert = (cond, msg) => { if (cond) { log('✓', msg) } else { failed = true; console.error('[e2e] ✗', msg) } }
+const readBody = (req) => new Promise((resolve) => {
+  let s = ''
+  req.on('data', (c) => { s += c })
+  req.on('end', () => resolve(s))
+})
 
 async function main() {
   // --- fixture server ---
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1')
     if (u.pathname.startsWith('/article/')) {
       const art = ARTICLES[u.pathname.slice('/article/'.length)] ?? ARTICLES.a1
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(makeHtml(server.address().port, art))
+    } else if (u.pathname === '/api/note/wxa/v1/note/show') {
+      // 墨问正文通道：按 uuid 回夹具；未登记 uuid 回 400 ASSET_NOT_FOUND（真机付费笔记的形态）
+      const uuid = JSON.parse((await readBody(req)) || '{}').uuid
+      const note = MOWEN_NOTES[uuid]
+      res.writeHead(note ? 200 : 400, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify(note ?? { code: 'ASSET_NOT_FOUND' }))
     } else if (u.pathname === '/api/mp/cover') {
       // Plan B: 每次只返回该号最新一篇
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -96,6 +144,7 @@ async function main() {
   const port = server.address().port
   const urlOf = (id) => `http://127.0.0.1:${port}/article/${id}`
   const wereadBase = `http://127.0.0.1:${port}`
+  const mowenBase = wereadBase   // 墨问 note/show 的 mock 与微信读书共用同一个 fixture server
   log('fixture server on', port)
 
   // --- isolated userData + library root, seed settings + weread creds ---
@@ -117,7 +166,7 @@ async function main() {
     executablePath: electronPath,
     args: [projectRoot, `--user-data-dir=${userDataDir}`],
     cwd: projectRoot,
-    env: { ...process.env, WXKIT_WEREAD_BASE: wereadBase },
+    env: { ...process.env, WXKIT_WEREAD_BASE: wereadBase, WXKIT_MOWEN_BASE: mowenBase },
   })
   const win = await app.firstWindow()
   const errors = []
@@ -543,6 +592,36 @@ async function main() {
     await win.waitForSelector('.ant-tooltip-container', { timeout: 5000 })
     const tipText = await win.locator('.ant-tooltip-container').innerText()
     assert(tipText.includes('dreamble'), `site-sync tooltip mentions the dreamble repo (saw: ${tipText.slice(0, 40)})`)
+
+    // ============ M64 · 墨问笔记下载 → 阅读器引用卡片（v0.11.2 R1）============
+    // 引用块的真实形态是 <note uuid> 纯占位标签、正文本身不带标题（与 <img uuid> 同模式），
+    // 标题靠对被引用 uuid 再发一次 note/show 拉回来。本用例钉死「原地渲染成带标题的卡片」
+    // 这条链路，并验 md 导出不丢标题（turndown 转 > 引用块）。
+    await win.click('[data-testid="nav-下载"]')
+    await win.waitForSelector('[data-testid="url-input"]', { timeout: 5000 })
+    await win.fill('[data-testid="url-input"]', `https://note.mowen.cn/detail/${MOWEN_PARENT}`)
+    await win.click('[data-testid="start-download"]')
+    await win.waitForSelector('[data-testid="history-event"]', { timeout: 30000 })
+    await win.waitForSelector('[data-testid="history-article"]', { timeout: 10000 })
+    const mowenItem = await topEvent().locator('[data-testid="history-article"]').first().innerText()
+    assert(mowenItem.includes('墨问父笔记'), `M64: 墨问链接经「按链接下载」入库 (saw: ${mowenItem.slice(0, 30)})`)
+
+    await topEvent().locator('[data-testid="history-read"]').first().click()
+    await win.waitForURL(/reader/, { timeout: 8000 })
+    await win.click('.ant-segmented >> text=网页')
+    await win.waitForSelector('iframe', { timeout: 10000 })
+    const refSrc = await win.getAttribute('iframe', 'src')
+    const refHtml = await app.evaluate(async ({ net }, u) => await (await net.fetch(u)).text(), refSrc)
+    assert(refHtml.includes('mowen-ref-card'), 'M64: 阅读器渲染引用卡片（blockquote.mowen-ref-card）')
+    assert(refHtml.includes('《子笔记标题甲》'), 'M64: 引用卡片带被引用笔记标题（v0.11.2 R1 核心）')
+    assert(refHtml.includes('子笔记作者丙'), 'M64: 引用卡片带被引用笔记作者')
+    assert(!refHtml.includes('引用笔记（'), 'M64: 旧尾部追加块已退场（同一信息不再两处重复）')
+
+    const mowenMdRel = readdirSync(libraryRoot, { recursive: true }).map(String)
+      .find((p) => p.endsWith('content.md') && p.includes('墨问'))
+    assert(!!mowenMdRel, 'M64: 墨问笔记落盘到文库（content.md）')
+    const mowenMd = readFileSync(join(libraryRoot, mowenMdRel), 'utf-8')
+    assert(mowenMd.includes('《子笔记标题甲》'), 'M64: md 导出引用块带标题（turndown 不丢）')
 
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)

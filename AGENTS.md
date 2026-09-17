@@ -119,7 +119,8 @@ npx electron . download --url "https://mp.weixin.qq.com/s/XXX" --formats md,html
 - **新增 CLI 命令组必须同步加进 `electron/cli-dispatch.ts` 的 `CLI_COMMANDS`**：分流靠白名单，漏登**不报错**——命令被判成 GUI 调用，开窗口后永不退出，症状是**挂起**而非报错，离根因隔一层（v0.8.0 的 `site` 命令组实录，已有回归测试钉住）。
 - **打包后 CLI 走内层二进制，不是 `npx electron .`**（模式分流见 `electron/main.ts` 的 `app.isPackaged` 分支）：mac 是 `/Applications/wx-kit.app/Contents/MacOS/wx-kit <子命令>`（别用 `open -a`，拿不到 stdout/退出码），win 是 `%LOCALAPPDATA%\Programs\wx-kit\wx-kit.exe`。**Windows 坑：Electron 是 GUI 子系统程序，stdout 不回贴调用控制台**——直接在 cmd/PowerShell 跑看不到 JSON，必须重定向到文件（`> out.json`，GUI 子系统下仍生效），管道 `|` 取 stdout 不可靠。agent 集成优先 mac/Linux。
 - **`wxfile://` 协议**：阅读器读本地图片用，路径严格限制在库根内（`electron/protocol.ts` 的 `resolveWxfilePath`，含编码 `..` 穿越防护）。
-- **HTML 阅读器 iframe** 用 `sandbox`（无 `allow-scripts`）：安全，但意味着 Playwright 无法在其内部执行脚本——e2e 里 HTML 视图只断言 iframe src，图片渲染由 md 视图的 `naturalWidth>0` 等价证明。
+- **HTML 阅读器 iframe** 用 `sandbox`（无 `allow-scripts`）：安全，但意味着 Playwright 无法在其内部执行脚本。**要看 HTML 视图的实际内容，别在 iframe 里跑断言**——用主进程 `net.fetch(iframeSrc)` 取 wxfile 源码文本再断言字符串（M59 起有先例，M64 的引用卡片用例沿用）；动态渲染（如图片真的加载出来）仍由 md 视图的 `naturalWidth>0` 等价证明。
+- **e2e 里 mock 不同链路要用不同拦法**（M64 实录）：微信读书靠 `WXKIT_WEREAD_BASE` + `persist:mpweixin` 会话上的 webRequest 重定向；墨问 `note/show` 走 Node 的 `fetch`（undici）、**不经 Chromium 会话，webRequest 拦不到**，只能用 `WXKIT_MOWEN_BASE` 换 base。墨问下载的 e2e 入口走**「按链接下载」tab 粘 `note.mowen.cn/detail/<id>`**（`downloadArticle` 有墨问路由），**不经 mocli**——mocli 是外部二进制，隔离环境有无不定，不能进 e2e。
 - **e2e 只能在主会话/本地跑**：子 agent 的沙箱解析不了 electron 二进制。GUI fixture e2e 只覆盖当前有效页面，不再设置“微信网络封锁模式”；另用隔离文库执行真实文章 URL 下载验收，不能用 fixture 结果替代真实链路。Antd v6 会在两个汉字按钮文本间自动插空格（"阅 读"），写选择器时注意。
 - **commit message 含反引号/`$`/`!` 时必须用 `git commit -F <文件>`,不能用 `-m "…"`**(2026-07-26 实录):
   双引号里的反引号会被 shell 当**命令替换真的执行**。当时 message 里写了 `` `brew update` ``/`` `brew list` ``
