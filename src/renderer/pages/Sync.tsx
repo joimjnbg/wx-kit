@@ -19,9 +19,11 @@ export default function Sync() {
   const [syncing, setSyncing] = useState(false)
   const [confirmed, setConfirmed] = useState<{ fakeid: string; nickname: string } | null>(null)
   // 选择器(票据 03):批量类型开关 + 单篇勾选 refId 集;计算集实时预览
+  // touched 记录用户动过的复选框(开或关):动过则显式值覆盖开关,默认全选只在首轮生效
   const [types, setTypes] = useState({ text: true, video: true })
   const [_checked, setChecked] = useState<Set<string>>(new Set())
-  const picked = useMemo(() => computePicked(rows, _checked, types), [rows, _checked, types])
+  const [touched, setTouched] = useState<Set<string>>(new Set())
+  const picked = useMemo(() => computePicked(rows, _checked, types, touched), [rows, _checked, types, touched])
 
   useEffect(() => {
     let alive = true
@@ -78,6 +80,15 @@ export default function Sync() {
         if (isFirst && prev.size === 0) for (const n of next) kept.add(n.refId)
         return kept
       })
+      // 首轮行进入 touched(默认全选即显式选择);后续新行追加进 touched+checked
+      setTouched((prev) => {
+        const kept = new Set(prev)
+        if (isFirst) for (const n of next) kept.add(n.refId)
+        else for (const n of next) {
+          if (!rows.some((r) => r.refId === n.refId)) { kept.add(n.refId); setChecked((c) => new Set(c).add(n.refId)) }
+        }
+        return kept
+      })
     } finally {
       setSyncing(false)
     }
@@ -121,12 +132,17 @@ export default function Sync() {
             renderItem={(r) => (
               <List.Item key={r.refId}>
                 <Checkbox data-testid={`sync-check-${r.refId}`} checked={picked.some((p) => p.refId === r.refId)}
-                  onChange={(e) => setChecked((prev) => {
-                    const next = new Set(prev)
-                    if (e.target.checked) next.add(r.refId)
-                    else next.delete(r.refId)
-                    return next
-                  })}>
+                  onChange={(e) => {
+                    const id = r.refId
+                    const on = e.target.checked
+                    setTouched((prev) => new Set(prev).add(id))
+                    setChecked((prev) => {
+                      const next = new Set(prev)
+                      if (on) next.add(id)
+                      else next.delete(id)
+                      return next
+                    })
+                  }}>
                   <span>{r.title}</span>
                 </Checkbox>
                 {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}

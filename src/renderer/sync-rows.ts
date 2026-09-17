@@ -14,12 +14,13 @@ export interface SyncRowInput {
   itemidx?: number
 }
 
-/** 组装后的行:稳定 refId、标题/类型标签/已存档标记,保留时间供排序。 */
+/** 组装后的行:稳定 refId、标题/类型标签/已存档标记,保留类型供选择集判断。 */
 export interface SyncRow {
   refId: string
   url: string
   title: string
   createTime: number
+  itemShowType?: number | null
   kindLabel: string | null
   kindWarn: boolean
   archived: boolean
@@ -52,16 +53,18 @@ export function syncRefId(r: Pick<SyncRowInput, 'url' | 'appmsgid' | 'itemidx'>)
 }
 
 /** 选择集计算(渲染层复述 core/applyPick 规则,禁引 core):
- * 类型开关定默认(text 覆盖非视频,video 覆盖视频5),单篇勾选覆盖。
- * checked 为显式勾选集;withTypes 为批量开关(默认全开)。 */
+ * 类型开关定默认(text 覆盖非视频,video 覆盖视频5);
+ * 勾选集为显式选择(开=include,关=exclude),覆盖开关默认值。
+ * withTypes 为批量开关(默认全开)。 */
 export function computePicked(
   rows: SyncRow[],
   checked: Set<string>,
   withTypes: { text: boolean; video: boolean },
+  touched: Set<string>,
 ): SyncRow[] {
   return rows.filter((r) => {
-    if (checked.has(r.refId)) return true
-    const isVideo = r.kindLabel === '视频'
+    if (touched.has(r.refId)) return checked.has(r.refId)
+    const isVideo = r.itemShowType === 5
     return isVideo ? withTypes.video : withTypes.text
   })
 }
@@ -85,6 +88,7 @@ export function buildSyncRows(
       url: r.url,
       title: r.title.trim() || r.url,
       createTime: r.createTime,
+      itemShowType: r.itemShowType,
       kindLabel: k.label,
       kindWarn: k.warn,
       archived: archived.archivedIds.has(id) || urlSet.has(urlKey(r.url)),

@@ -70,14 +70,25 @@ describe('computePicked 选择集', () => {
     row({ url: 't1', title: '文', createTime: 1, itemShowType: 0, appmsgid: 1, itemidx: 1 }),
     row({ url: 'v1', title: '视', createTime: 2, itemShowType: 5, appmsgid: 2, itemidx: 1 }),
   ], none())
-  it('默认全开全选;关 text 只剩视频', () => {
-    expect(computePicked(rows(), new Set(), { text: true, video: true })).toHaveLength(2)
-    const out = computePicked(rows(), new Set(), { text: false, video: true })
-    expect(out.map((r) => r.refId)).toEqual(['2_1'])
+  it('默认全开全选;关 text 后显式取消的图文剔除,视频走开关默认', () => {
+    const r = rows()
+    expect(computePicked(r, new Set(), { text: true, video: true }, new Set())).toHaveLength(2)
+    // 关 text:图文行被显式取消才剔除,视频行走开关默认
+    const out = computePicked(r, new Set(), { text: false, video: true }, new Set(['1_1']))
+    expect(out.map((x) => x.refId)).toEqual(['2_1'])
   })
-  it('单篇勾选覆盖开关:关 text 后勾选加回图文', () => {
-    const out = computePicked(rows(), new Set(['1_1']), { text: false, video: true })
-    expect(out.map((r) => r.refId).sort()).toEqual(['1_1', '2_1'])
+  it('单篇勾选覆盖开关:关 text 后勾选加回图文;取消勾选可剔除默认入选', () => {
+    const r = rows()
+    // 关 text:图文 1_1 显式勾选加回,视频 2_1 走开关默认(未动过 → 默认值)
+    const out = computePicked(r, new Set(['1_1']), { text: false, video: true }, new Set(['1_1']))
+    expect(out.map((x) => x.refId).sort()).toEqual(['1_1', '2_1'])
+    const out2 = computePicked(r, new Set(), { text: true, video: true }, new Set(['1_1']))
+    expect(out2.map((x) => x.refId)).toEqual(['2_1'])
+  })
+  it('视频判断走 itemShowType(非展示标签),标签漂移不影响选择', () => {
+    const r = rows().map((x) => ({ ...x, kindLabel: '改名' }))
+    const touched = new Set(r.map((x) => x.refId))
+    expect(computePicked(r, new Set(['2_1']), { text: false, video: true }, touched).map((x) => x.refId)).toEqual(['2_1'])
   })
   it('pickSummary 话术', () => {
     expect(pickSummary(0, 3)).toBe('已选 0 / 3 篇')
