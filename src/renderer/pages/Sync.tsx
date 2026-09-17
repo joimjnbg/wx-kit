@@ -24,6 +24,61 @@ export default function Sync() {
   const [_checked, setChecked] = useState<Set<string>>(new Set())
   const [touched, setTouched] = useState<Set<string>>(new Set())
   const picked = useMemo(() => computePicked(rows, _checked, types, touched), [rows, _checked, types, touched])
+  // 下载接线(票据 04):计算集按账号走 subscriptionsDownloadNew,进度复用订阅广播;
+  // 行级结果落 resultById(成功/失败/不可见常驻行上),失败行可单篇重试
+  const [downloading, setDownloading] = useState(false)
+  const [dlProgress, setDlProgress] = useState<{ done: number; total: number; phase: string } | null>(null)
+  const [resultById, setResultById] = useState<Record<string, { status: 'ok' | 'failed' | 'unavailable'; message?: string }>>({})
+
+  useEffect(() => api.onSubscriptionDownloadProgress((e) => {
+    setDlProgress({ done: e.done, total: e.total, phase: e.phase })
+  }), [])
+
+  const downloadPicked = async (ids?: string[]) => {
+    const targets = ids ?? picked.map((p) => p.refId)
+    if (!targets.length || downloading) return
+    const target = accountId ?? confirmed?.fakeid
+    if (!target) { message.warning('请先同步确认账号'); return }
+    setDownloading(true)
+    try {
+      const r = await api.subscriptionsDownloadNew(target, targets)
+      const kept = r?.kept ?? 0
+      if (kept > 0) message.warning(`已下载 ${r?.downloaded ?? 0} 篇,还有 ${kept} 篇未成功,可重试`)
+      else message.success(`已下载 ${r?.downloaded ?? targets.length} 篇${r?.skipped ? `,${r.skipped} 篇文库已有` : ''}`)
+      // 行级结果:成功行标 ok,失败行留 failed/unavailable 供单篇重试(常驻,不清)
+      setResultById((prev) => {
+        const next = { ...prev }
+        for (const id of targets) next[id] = { status: 'ok' }
+        return next
+      })
+      // 下载后刷新行(已下载行清出待处理,archived 标记更新)
+      const [subs, lib] = await Promise.all([api.subscriptionsList(), api.libraryList()])
+      const acc = subs.accounts.find((a) => a.fakeid === target)
+      setAccounts(subs.accounts)
+      const archivedIds = new Set(lib.map((m) => m.id))
+      const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
+      const next = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      // 留在待处理中的 = 未成功(失败/不可见):标 failed 供重试;已清出 = 成功
+      const nextIds = new Set(next.map((n) => n.refId))
+      setResultById((prev) => {
+        const marked = { ...prev }
+        for (const id of targets) {
+          if (nextIds.has(id)) marked[id] = { status: 'failed', message: '未成功,可重试' }
+        }
+        return marked
+      })
+      setRows((prev) => mergeSyncRows(prev, next))
+      setChecked((prev) => new Set([...prev].filter((id) => nextIds.has(id))))
+      setTouched((prev) => new Set([...prev].filter((id) => nextIds.has(id))))
+    } catch (e) {
+      message.error('下载失败:' + (e as Error).message)
+    } finally {
+      setDownloading(false)
+      setDlProgress(null)
+    }
+  }
+
+  const retryOne = (refId: string) => downloadPicked([refId])
 
   useEffect(() => {
     let alive = true
@@ -127,28 +182,42 @@ export default function Sync() {
                 <Checkbox data-testid="sync-type-video" checked={types.video}
                   onChange={(e) => setTypes((t) => ({ ...t, video: e.target.checked }))}>视频</Checkbox>
                 <span data-testid="sync-pick-count">{pickSummary(picked.length, rows.length)}</span>
+                <Button data-testid="sync-download" type="primary" loading={downloading}
+                  disabled={!picked.length} onClick={() => downloadPicked()}>
+                  下载已选({picked.length})
+                </Button>
+                {dlProgress && <span data-testid="sync-dl-progress">{dlProgress.done}/{dlProgress.total} {dlProgress.phase}</span>}
               </div>
             }
-            renderItem={(r) => (
-              <List.Item key={r.refId}>
-                <Checkbox data-testid={`sync-check-${r.refId}`} checked={picked.some((p) => p.refId === r.refId)}
-                  onChange={(e) => {
-                    const id = r.refId
-                    const on = e.target.checked
-                    setTouched((prev) => new Set(prev).add(id))
-                    setChecked((prev) => {
-                      const next = new Set(prev)
-                      if (on) next.add(id)
-                      else next.delete(id)
-                      return next
-                    })
-                  }}>
-                  <span>{r.title}</span>
-                </Checkbox>
-                {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}
-                {r.archived && <Tag color="green">已存档</Tag>}
-              </List.Item>
-            )} />
+            renderItem={(r) => {
+              const res = resultById[r.refId]
+              return (
+                <List.Item key={r.refId}
+                  actions={res?.status === 'failed'
+                    ? [<Button key="retry" size="small" data-testid={`sync-retry-${r.refId}`} onClick={() => retryOne(r.refId)}>重试</Button>]
+                    : []}>
+                  <Checkbox data-testid={`sync-check-${r.refId}`} checked={picked.some((p) => p.refId === r.refId)}
+                    onChange={(e) => {
+                      const id = r.refId
+                      const on = e.target.checked
+                      setTouched((prev) => new Set(prev).add(id))
+                      setChecked((prev) => {
+                        const next = new Set(prev)
+                        if (on) next.add(id)
+                        else next.delete(id)
+                        return next
+                      })
+                    }}>
+                    <span>{r.title}</span>
+                  </Checkbox>
+                  {r.kindLabel && <Tag color={r.kindWarn ? 'warning' : 'default'}>{r.kindLabel}</Tag>}
+                  {r.archived && <Tag color="green">已存档</Tag>}
+                  {res?.status === 'ok' && <Tag color="green">已下载</Tag>}
+                  {res?.status === 'failed' && <Tag color="red">未成功</Tag>}
+                  {res?.status === 'unavailable' && <Tag color="orange">读者不可见</Tag>}
+                </List.Item>
+              )
+            }} />
       </div>
     </div>
   )
