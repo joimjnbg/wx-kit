@@ -384,6 +384,10 @@ export default function Subscriptions() {
         {authExpired && <Alert type="warning" showIcon style={{ marginBottom: 16 }}
           message="订阅检查需重新登录微信读书" description="到「设置」页重新扫码登录后，订阅检查会自动恢复。" />}
 
+        {/* surface 白底卡片：与下载页两个 tab 的内容区同形态（2026-09-17 统一）。
+            管理区（搜索→清单）进卡片；「检查记录」留在卡片外——与下载页 DownloadHistory
+            同为卡片外的独立日志区块（h3 自带分节语义）。Alert 语义也留卡片外。 */}
+        <div className="surface" style={{ padding: '20px 22px' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <Input placeholder="粘贴该公众号任意一篇文章的链接以订阅" value={kw} onChange={(e) => setKw(e.target.value)}
             onPressEnter={search} style={{ width: 280 }} data-testid="subs-search-input" allowClear disabled={searching} />
@@ -511,6 +515,7 @@ export default function Subscriptions() {
               </List.Item>
               ) }} />
           )}
+        </div>
 
         <div style={{ marginTop: 24 }} data-testid="subs-check-log">
           <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>检查记录</h3>
