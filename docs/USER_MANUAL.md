@@ -18,7 +18,7 @@
 
 ### 五件事全景图
 
-![wx-kit 五件事全景图](screenshots/illustrations/illustration-clean__light_toned_macOS_des.png)
+![wx-kit 五件事全景图](screenshots/illustrations/illustration-overview.png)
 
 打开 wx-kit，顶部从左到右：**下载**（粘 URL 拉文章）、**订阅**（后台自动拉新文章）、**文库**（本地阅读与搜索）、**阅读器**（点开单篇阅读）、**设置**（偏好与策略）。下面五节就是这五件事的上手指南。
 
@@ -91,7 +91,7 @@ wx-kit --version
 
 ### 步骤
 
-![下载 3 步信息图](screenshots/illustrations/illustration-3_step_editorial_diagram_on_.png)
+![下载 3 步信息图](screenshots/illustrations/illustration-download-steps.png)
 
 1. 复制一篇文章的链接，粘到「文章链接」框。每行一条，可以一次粘多条批量下。
 2. 在「保存为」里勾你想要的格式（Markdown / HTML / meta / 原始 JSON / PDF；至少 Markdown 必选）。
@@ -113,7 +113,7 @@ wx-kit --version
 
 ### 双通道架构：什么需要 mocli、什么不需要
 
-![墨问双通道架构](screenshots/illustrations/illustration-simple_two_track_architectur.png)
+![墨问双通道架构](screenshots/illustrations/illustration-mowen-dual-channel.png)
 
 - **粘 URL 直下**：wx-kit 自己用墨问开放的匿名接口取正文，**不需要 mocli**（与微信文章下载同条路径）
 - **搜作者 / 关键词 / 订阅**：必须经 mocli（带你的 API Key 鉴权），wx-kit 不直连墨问后台
@@ -174,7 +174,7 @@ mocli auth init
 
 订阅页是后台机制——你订阅一个号 / 一个作者，wx-kit 会在后台定时检查它们的新文章，按你的策略「自动下载」或「仅提示」。
 
-![订阅后台机制示意图](screenshots/illustrations/illustration-subtle_isometric_editorial_i.png)
+![订阅后台机制示意图](screenshots/illustrations/illustration-subscriptions-background.png)
 
 **别把它想象成「我每次去查一次」**——订阅一旦建立，wx-kit 在你打开的整个过程按节奏对它们做了检查，你只看到结果（行内「发现 N 篇，已下载 N 篇」或「无新文章」）。
 
@@ -214,7 +214,7 @@ mocli auth init
 
 下载的文章都在文库。文库是按公众号分组的（墨问笔记也独立成组），可以搜索、按时间排序、在卡片与列表两种视图切换。
 
-![文库像一本翻开的书](screenshots/illustrations/illustration-An_open_book_illustration_in_c.png)
+![文库像一本翻开的书](screenshots/illustrations/illustration-library-book.png)
 
 ![文库分组与卡片](screenshots/manual-library-cards.png)
 
@@ -289,7 +289,7 @@ mocli auth init
 
 ## 8. 常见问题
 
-![下载历史 3 态对照](screenshots/illustrations/illustration-Three_horizontal_status_cards_.png)
+![下载历史 3 态对照](screenshots/illustrations/illustration-download-history-states.png)
 
 下载完成的历史事件展开后，常见有这三种状态：成功（绿 ✓）、内容不可用（橙 ⚠）、自动下载（蓝 ℹ）。失败态不会被静默清掉，会保留下来等你看。
 
