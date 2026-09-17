@@ -583,23 +583,23 @@ async function main() {
       return el && !el.className.includes('ant-checkbox-wrapper-checked')
     }, undefined, { timeout: 5000 })
     assert(true, 'text toggle flips off (explicit checks keep rows picked)')
+    // waitForFunction 在 Windows 打包应用里偶发 poll 丢失:改用轮询断言,行为等价
+    const waitCount = async (want: string | null, label: string) => {
+      for (let i = 0; i < 25; i++) {
+        const cur = await countText()
+        if (want === null ? cur !== before : cur === want) { assert(true, label); return cur }
+        await win.waitForTimeout(200)
+      }
+      assert(false, `${label} (want ${want ?? 'change'}, got ${await countText()})`)
+      return before
+    }
     await win.locator('[data-testid="sync-type-text"]').click()
-    await win.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="sync-type-text"]')
-      return el && el.className.includes('ant-checkbox-wrapper-checked')
-    }, undefined, { timeout: 5000 })
-    assert((await countText()) === before, 'text toggle back keeps computed set')
-    // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复
+    await waitCount(before, 'text toggle back keeps computed set')
+    // 单篇勾选覆盖:取消第一行勾选,计算集减一;勾回恢复(同上轮询,免 waitForFunction)
     await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
-    await win.waitForFunction(
-      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent !== prev,
-      before, { timeout: 5000 })
-    assert((await countText()) !== before, 'unchecking a row shrinks computed set')
+    await waitCount(null, 'unchecking a row shrinks computed set')
     await win.locator('[data-testid="sync-rows"] .ant-checkbox').first().click()
-    await win.waitForFunction(
-      (prev) => document.querySelector('[data-testid="sync-pick-count"]')?.textContent === prev,
-      before, { timeout: 5000 })
-    assert((await countText()) === before, 're-checking restores computed set')
+    await waitCount(before, 're-checking restores computed set')
     // 下载贯通:计算集下载落库,断言新增文章目录含 content.md + meta.json
     // waitForFunction 跑在浏览器上下文,读不到 node 变量:库路径经 WXK_E2E_LIB 环境变量传入
     const libBefore = new Set(JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles.map((a) => a.id))
