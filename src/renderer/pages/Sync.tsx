@@ -40,6 +40,10 @@ export default function Sync() {
     const target = accountId ?? confirmed?.fakeid
     if (!target) { message.warning('请先同步确认账号'); return }
     setDownloading(true)
+    // 进度标记:广播不到时(如单测外)至少显示"下载中",下载结束清除
+    const progressTimer = setTimeout(() => {
+      setDlProgress((cur) => cur ?? { done: 0, total: targets.length, phase: 'downloading' })
+    }, 1500)
     try {
       const r = await api.subscriptionsDownloadNew(target, targets)
       const kept = r?.kept ?? 0
@@ -73,6 +77,7 @@ export default function Sync() {
     } catch (e) {
       message.error('下载失败:' + (e as Error).message)
     } finally {
+      clearTimeout(progressTimer)
       setDownloading(false)
       setDlProgress(null)
     }
