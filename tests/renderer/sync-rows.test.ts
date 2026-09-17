@@ -1,10 +1,10 @@
 // tests/renderer/sync-rows.test.ts
 // 票据 02a:行组装纯函数(稳定 refId + 已存档交叉)。
 import { describe, it, expect } from 'vitest'
-import { buildSyncRows, syncRefId, type SyncRowInput } from '../../src/renderer/sync-rows'
+import { buildSyncRows, mergeSyncRows, syncRefId, type SyncRowInput } from '../../src/renderer/sync-rows'
 
 const row = (over: Partial<SyncRowInput>): SyncRowInput => ({
-  url: 'u', title: 't', ...over,
+  url: 'u', title: 't', createTime: 1, ...over,
 })
 const none = () => ({ archivedIds: new Set<string>(), archivedUrls: new Set<string>() })
 
@@ -46,5 +46,21 @@ describe('buildSyncRows', () => {
   it('syncRefId 与 core refId 同规则:主键优先,否则归一化 URL', () => {
     expect(syncRefId(row({ url: 'u', appmsgid: 7, itemidx: 2 }))).toBe('7_2')
     expect(syncRefId(row({ url: 'https://mp.weixin.qq.com/s/a~b' }))).toBe('https://mp.weixin.qq.com/s/a_b')
+  })
+})
+
+describe('mergeSyncRows 并集合并', () => {
+  it('同 refId 用新行替换(archived 刷新),旧集独有行保留,按时间重排', () => {
+    const prev = buildSyncRows([
+      row({ url: 'u1', title: '旧', createTime: 10, appmsgid: 1, itemidx: 1 }),
+      row({ url: 'u2', title: '留', createTime: 5 }),
+    ], none())
+    const next = buildSyncRows([
+      row({ url: 'u1', title: '旧', createTime: 10, appmsgid: 1, itemidx: 1 }),
+      row({ url: 'u3', title: '新', createTime: 20 }),
+    ], { archivedIds: new Set(['1_1']), archivedUrls: new Set() })
+    const out = mergeSyncRows(prev, next)
+    expect(out.map((r) => r.refId)).toEqual(['u3', '1_1', 'u2'])
+    expect(out.find((r) => r.refId === '1_1')?.archived).toBe(true)
   })
 })
