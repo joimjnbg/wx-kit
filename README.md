@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 ![Electron](https://img.shields.io/badge/Electron-42-9feaf9.svg)
 ![Node](https://img.shields.io/badge/Node-20%2B-339933.svg)
-![Status](https://img.shields.io/badge/v0.11.1-released-success.svg)
+![Status](https://img.shields.io/badge/v0.11.2-released-success.svg)
 
 ## 这是什么
 
@@ -17,9 +17,12 @@ wx-kit 是一个本地优先的微信公众号文章下载器：
 - 可把文库文章同步为 Astro 站点内容；
 - GUI 适合日常使用，CLI 输出纯 JSON，适合 AI agent 和脚本调用。
 
-> **当前能力边界（v0.11.1）**
+> **当前能力边界（v0.11.2）**
 >
-> v0.11.0 把文库内容源从「只下微信文章」扩到「**微信 + 墨问**」，并让单篇路径更顺手；v0.11.1 修复了从 Dock/Finder 启动时 mocli 误报「未检测到」的问题（GUI 进程不加载 shell 配置，此前找不到 nvm/homebrew 安装的 mocli）：
+> v0.11.0 把文库内容源从「只下微信文章」扩到「**微信 + 墨问**」；v0.11.2 补齐墨问阅读体验（引用卡片、图集补图）并新增按关键词搜笔记：
+>
+> - **引用卡片**：下载的墨问笔记里引用其他笔记时，正文原位置渲染标题/摘要/作者卡片（此前只有 uuid + 链接）；付费子笔记如实标注；图集缺图自动补齐（墨问图片池不保证完整）；
+> - **按关键词搜笔记**：墨问 tab 新增「按用户 ｜ 按关键词」切换——关键词搜全站，结果带作者/摘要/阅读数，点作者名直接展开他的全部笔记；
 >
 > - **墨问笔记下载**：下载页新增「墨问笔记」tab——按用户名搜索作者（候选带简介）→ 条件拉清单 → 勾选批量下载；URL 输入框同时识别墨问笔记地址；合集引用默认渲染引用块，勾选「展开引用子笔记」递归下载；
 > - **墨问作者订阅**：订阅页新增「墨问作者」tab——搜索作者订阅，定时检查新笔记（与公众号订阅共用频率与自动下载设置），行内清单可见可挑，检查记录独立留痕；
@@ -30,7 +33,7 @@ wx-kit 是一个本地优先的微信公众号文章下载器：
 
 ## 当前界面
 
-以下截图来自 v0.11.0 界面（v0.11.1 界面无变化；v0.11.0 新增了下载页「墨问笔记」tab 与订阅页平台切换）。
+以下截图来自 v0.11.2 界面（下载页双 tab 与内容卡片为 v0.11.2 统一后的形态；订阅页平台切换、文库、阅读器与 v0.11.0 一致）。
 
 | URL 下载与历史 | 本地文库 |
 |---|---|
@@ -83,11 +86,11 @@ wx-kit --version
 
 ### 下载安装包
 
-前往 [GitHub Releases](../../releases) 下载最新已发布版本 v0.11.1：
+前往 [GitHub Releases](../../releases) 下载最新已发布版本 v0.11.2：
 
-- Apple Silicon：`wx-kit-0.11.1-arm64.dmg`
-- Intel Mac：`wx-kit-0.11.1.dmg`
-- Windows：`wx-kit.Setup.0.11.1.exe`
+- Apple Silicon：`wx-kit-0.11.2-arm64.dmg`
+- Intel Mac：`wx-kit-0.11.2.dmg`
+- Windows：`wx-kit.Setup.0.11.2.exe`
 
 当前安装包未签名、未公证。macOS 首次打开时需在“系统设置 → 隐私与安全性”中允许，或执行上面的 `xattr -cr`；Windows 遇到 SmartScreen 时选择“更多信息 → 仍要运行”。
 
@@ -206,7 +209,7 @@ npm run build
 
 ## 项目状态
 
-- 最新已发布版本：v0.11.1；GitHub Release 与 brew tap 已上线（npm `@simiam/wx-kit` 仍按可选渠道规约维护）；
+- 最新已发布版本：v0.11.2；GitHub Release 与 brew tap 已上线（npm `@simiam/wx-kit` 仍按可选渠道规约维护）；
 - 下一版候选与完整发布史统一维护在 [`ROADMAP.md`](ROADMAP.md)，README 不再复制一份容易漂移的版本史。
 
 需求、设计与开发约定分别见 [`docs/`](docs/)、[`ROADMAP.md`](ROADMAP.md) 和 [`AGENTS.md`](AGENTS.md)。

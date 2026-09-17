@@ -120,7 +120,7 @@ WX=${WX:-$(command -v wx-kit || echo /Applications/wx-kit.app/Contents/MacOS/wx-
 #    → 候选里确认 uid 后直接下载该作者清单（不订阅）：
 "$WX" mowen import --uid <uid> --count 20
 
-# (c) 合集引用：默认只渲染引用块；显式展开才递归下载子笔记
+# (c) 合集引用：默认在正文原地渲染引用卡片（标题/摘要/作者）；显式展开才递归下载子笔记
 "$WX" mowen import "https://note.mowen.cn/detail/XXXX" --expand-refs
 ```
 
