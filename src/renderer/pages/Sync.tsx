@@ -184,7 +184,7 @@ export default function Sync() {
                   onChange={(e) => {
                     const on = e.target.checked
                     setTypes((t) => ({ ...t, text: on }))
-                    // 关 text:该类未动过的行取消勾选(显式勾选保留);开 text:该类行默认勾选
+                    // 关 text:该类行取消勾选(显式勾选保留);开 text:该类行默认勾选
                     setTouched((prev) => {
                       const next = new Set(prev)
                       for (const r of rows) if (r.itemShowType !== 5) next.add(r.refId)
@@ -195,7 +195,7 @@ export default function Sync() {
                       for (const r of rows) {
                         if (r.itemShowType === 5) continue
                         if (on) next.add(r.refId)
-                        else if (!touched.has(r.refId) || !prev.has(r.refId)) next.delete(r.refId)
+                        else next.delete(r.refId)
                       }
                       return next
                     })
@@ -214,7 +214,7 @@ export default function Sync() {
                       for (const r of rows) {
                         if (r.itemShowType !== 5) continue
                         if (on) next.add(r.refId)
-                        else if (!touched.has(r.refId) || !prev.has(r.refId)) next.delete(r.refId)
+                        else next.delete(r.refId)
                       }
                       return next
                     })
