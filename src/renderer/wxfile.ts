@@ -4,9 +4,11 @@
 // Windows 上分隔符混用(库根 `\`、dir `/` 或反之),故两侧统一成 `/` 后再比前缀。
 export function toWxfileBase(libraryRoot: string, dir: string): string {
   const norm = (s: string) => s.replace(/[/\\]+$/, '').replace(/\\/g, '/')
-  const prefix = `${norm(libraryRoot)}/`
+  const root = norm(libraryRoot)
   const full = norm(dir)
-  let rel = full.startsWith(prefix) ? full.slice(prefix.length) : dir
+  // 库根本身 → 空相对路径;Windows 比对不区分大小写
+  let rel = full.toLowerCase() === root.toLowerCase() ? ''
+    : full.toLowerCase().startsWith(`${root.toLowerCase()}/`) ? full.slice(root.length + 1) : dir
   rel = rel.replace(/^[/\\]+/, '').split(/[/\\]/).map(encodeURIComponent).join('/')
   return `wxfile://local/${rel}`
 }

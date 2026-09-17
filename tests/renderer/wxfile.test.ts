@@ -15,6 +15,9 @@ describe('toWxfileBase', () => {
     expect(out).not.toContain('C:')
     expect(decodeURIComponent(out)).toContain('甲号/2026-03-01_文')
   })
+  it('库根本身映射为空基地址', () => {
+    expect(toWxfileBase('C:\\Users\\x\\lib', 'c:/users/x/lib')).toBe('wxfile://local/')
+  })
   it('库根之外回退原 dir(协议侧 403 降级)', () => {
     expect(toWxfileBase('/lib/root', '/other/dir')).toBe('wxfile://local/other/dir')
   })
