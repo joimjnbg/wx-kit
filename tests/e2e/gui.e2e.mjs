@@ -232,8 +232,9 @@ async function main() {
     await win.click('[data-testid="nav-下载"]')
     await win.waitForSelector('[data-testid="start-download"]', { timeout: 5000 })
     // M61:下载页双模式（链接 / 墨问笔记）——默认链接模式原样；墨问 tab 切过去渲染搜索骨架
-    assert((await win.locator('[data-testid="download-mode-segmented"]').count()) === 1, 'M61: download mode segmented present')
-    await win.locator('.ant-segmented-item:has-text("墨问笔记")').click()
+    // 顶层切换为 antd Tabs(card 型)（安哥 2026-09-17 反馈 Segmented 看不出 tab 效果）
+    assert((await win.locator('[data-testid="download-mode-tabs"]').count()) === 1, 'M61: download mode tabs present')
+    await win.locator('.ant-tabs-tab:has-text("墨问笔记")').click()
     await win.waitForSelector('[data-testid="mowen-mode"]', { timeout: 5000 })
     assert((await win.locator('[data-testid="mowen-search-input"]').count()) === 1, 'M61: mowen tab shows user search input')
     // e2e 隔离环境 PATH 里 mocli 可达与否不定——指引条或正常搜索框二选一,不允许空白页
@@ -251,7 +252,7 @@ async function main() {
     await win.waitForTimeout(200)
     ph = await win.locator('[data-testid="mowen-search-input"] input').getAttribute('placeholder')
     assert(ph === '按用户名/简介模糊搜索墨问用户', `M65: switch back to user mode restores placeholder (saw: ${ph})`)
-    await win.locator('.ant-segmented-item:has-text("按链接下载")').click()
+    await win.locator('.ant-tabs-tab:has-text("按链接下载")').click()
     await win.waitForSelector('[data-testid="start-download"]', { timeout: 5000 })
     await win.fill('[data-testid="url-input"]', [urlOf('a1'), urlOf('a2'), urlOf('a3')].join('\n'))
     await win.click('[data-testid="start-download"]')
