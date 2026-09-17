@@ -24,6 +24,43 @@ export default function Sync() {
   const [_checked, setChecked] = useState<Set<string>>(new Set())
   const [touched, setTouched] = useState<Set<string>>(new Set())
   const picked = useMemo(() => computePicked(rows, _checked, types, touched), [rows, _checked, types, touched])
+  // 下载接线(票据 04):计算集按账号走 subscriptionsDownloadNew,进度复用订阅广播
+  const [downloading, setDownloading] = useState(false)
+  const [dlProgress, setDlProgress] = useState<{ done: number; total: number; phase: string } | null>(null)
+
+  useEffect(() => api.onSubscriptionDownloadProgress((e) => {
+    setDlProgress({ done: e.done, total: e.total, phase: e.phase })
+  }), [])
+
+  const downloadPicked = async () => {
+    if (!picked.length || downloading) return
+    const target = accountId ?? confirmed?.fakeid
+    if (!target) { message.warning('请先同步确认账号'); return }
+    setDownloading(true)
+    try {
+      const ids = picked.map((p) => p.refId)
+      const r = await api.subscriptionsDownloadNew(target, ids)
+      const kept = r?.kept ?? 0
+      if (kept > 0) message.warning(`已下载 ${r?.downloaded ?? 0} 篇,还有 ${kept} 篇未成功,可重试`)
+      else message.success(`已下载 ${r?.downloaded ?? ids.length} 篇${r?.skipped ? `,${r.skipped} 篇文库已有` : ''}`)
+      // 下载后刷新行(已下载行清出待处理,archived 标记更新)
+      const [subs, lib] = await Promise.all([api.subscriptionsList(), api.libraryList()])
+      const acc = subs.accounts.find((a) => a.fakeid === target)
+      setAccounts(subs.accounts)
+      const archivedIds = new Set(lib.map((m) => m.id))
+      const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
+      const next = buildSyncRows(acc?.newRefs ?? [], { archivedIds, archivedUrls })
+      setRows((prev) => mergeSyncRows(prev, next).filter((row) =>
+        next.some((n) => n.refId === row.refId) || picked.every((p) => p.refId !== row.refId)))
+      setChecked((prev) => new Set([...prev].filter((id) => next.some((n) => n.refId === id))))
+      setTouched((prev) => new Set([...prev].filter((id) => next.some((n) => n.refId === id))))
+    } catch (e) {
+      message.error('下载失败:' + (e as Error).message)
+    } finally {
+      setDownloading(false)
+      setDlProgress(null)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -127,6 +164,11 @@ export default function Sync() {
                 <Checkbox data-testid="sync-type-video" checked={types.video}
                   onChange={(e) => setTypes((t) => ({ ...t, video: e.target.checked }))}>视频</Checkbox>
                 <span data-testid="sync-pick-count">{pickSummary(picked.length, rows.length)}</span>
+                <Button data-testid="sync-download" type="primary" loading={downloading}
+                  disabled={!picked.length} onClick={downloadPicked}>
+                  下载已选({picked.length})
+                </Button>
+                {dlProgress && <span data-testid="sync-dl-progress">{dlProgress.done}/{dlProgress.total} {dlProgress.phase}</span>}
               </div>
             }
             renderItem={(r) => (
