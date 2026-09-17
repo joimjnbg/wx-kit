@@ -178,6 +178,11 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
       )}
       {errorMsg && <div className="setting-hint" style={{ color: 'var(--cinnabar)', marginBottom: 12 }} data-testid="mowen-tab-error">{errorMsg}</div>}
 
+      {/* surface 白底卡片：与「按链接下载」tab 的内容区同形态——两个 tab 落在同一视觉
+          容器里，Segmented 与内容的关系才成立（2026-09-17 安哥反馈「tab 与内容区割裂」
+          的根因是 UrlMode 有 surface、这里裸渲染，不是切换控件的问题）。padding 对齐
+          UrlMode 的 cfg-sec（20px 22px）。指引条/错误条留在卡片外（alert 语义）。 */}
+      <div className="surface" style={{ padding: '20px 22px' }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <Segmented
           value={mode}
@@ -288,6 +293,7 @@ export default function MowenMode({ onDone }: { onDone: () => void }) {
           />
         </>
       )}
+      </div>
     </div>
   )
 }
