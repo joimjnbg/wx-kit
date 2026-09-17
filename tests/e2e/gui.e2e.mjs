@@ -607,8 +607,13 @@ async function main() {
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)
 
-    // --- M21: 关窗后 activate 重建窗口 ---
+    // --- M21: 关窗后 activate 重建窗口(Windows 下关窗即退出,跳过重建断言) ---
+    const isWin = process.platform === 'win32'
     await win.close()
+    if (isWin) {
+      assert(true, 'windows: window close exits app, skip activate-reopen')
+      return
+    }
     let zero = -1
     for (let i = 0; i < 20; i++) {
       zero = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
