@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MpAudioSource } from '../parse-audio'
 import { formatDuration } from './export-video'
+import { FETCH_TIMEOUT_MS } from '../fetch-html'
 import { globalRequestStopCode } from '../mp-errors'
 
 /** meta.json 里的语音记录。**不存 url**——getvoice 302 filekey 短窗有效,存了也用不了。 */
@@ -58,7 +59,8 @@ export async function downloadAudios(
     const rel = `audios/audio-${i + 1}.mp3`
     onProgress?.({ index: i + 1, total: audios.length, audio: a })
     try {
-      const { data } = await fetchBinary(a.url)
+      // 音频百 KB 量级,超时沿图片档 30s(视频按体积算不适用)
+      const { data } = await fetchBinary(a.url, FETCH_TIMEOUT_MS)
       await writeFile(join(dir, rel), data)
       records[i].path = rel
       // <audio> 不依赖脚本,阅读器的 iframe(sandbox 无 allow-scripts)里也能播
