@@ -66,8 +66,8 @@ export interface ArticleMeta {
 }
 
 // M1's DownloadQueue emits only fetch/save/done/failed (queue-level granularity).
-// 'images' and 'export' are reserved for M2's finer per-article progress (PRD §8.4).
-export type ProgressPhase = 'fetch' | 'images' | 'video' | 'export' | 'save' | 'done' | 'failed'
+// 'images' and 'export' are reserved for M2's finer per-article progress (PRD A§8.4).
+export type ProgressPhase = 'fetch' | 'images' | 'video' | 'audio' | 'export' | 'save' | 'done' | 'failed'
 
 export interface ProgressEvent {
   total: number

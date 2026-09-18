@@ -9,6 +9,7 @@ import { writeCover } from './export-cover'
 import { writePdfFromHtml } from './export-pdf'
 import { buildImageMap, rewriteImageRefs } from '../image-localizer'
 import { downloadVideos } from './export-video'
+import { downloadAudios } from './export-audio'
 import type { ProgressPhase } from '../types'
 import { globalRequestStopCode } from '../mp-errors'
 
@@ -33,12 +34,14 @@ export interface ExportInput {
   formats: DownloadFormat[]
   /** 是否下载文中视频（内容的一部分，不是格式）。缺省视为 true。 */
   downloadVideos?: boolean
+  /** 是否下载文中语音（内容的一部分，不是格式）。缺省视为 true。 */
+  downloadAudios?: boolean
   accountId?: string
 }
 
 /** 按所选格式导出一篇文章，返回最终 meta。调用方保证 dir 尚不存在或可写。 */
 export async function exportArticle(input: ExportInput, deps: ExportDeps): Promise<ArticleMeta> {
-  const { parsed, id, sourceUrl, dir, formats, downloadVideos: wantVideo = true } = input
+  const { parsed, id, sourceUrl, dir, formats, downloadVideos: wantVideo = true, downloadAudios: wantAudio = true } = input
   await mkdir(dir, { recursive: true })
 
   // 解析期的告警（未识别消息类型、正文疑似脚本…）走与视频失败同一条通路，
@@ -86,17 +89,28 @@ export async function exportArticle(input: ExportInput, deps: ExportDeps): Promi
   if (videoRecords.length) meta.videos = videoRecords
   for (const w of warnings) deps.onWarning?.(w)
 
+  // 语音:与视频同规——写 md/html 之前,本次流程内下完(getvoice 302 filekey 短窗有效)。
+  if (wantAudio && parsed.audios.length) deps.onProgress?.({ phase: 'audio', message: `下载语音 0/${parsed.audios.length}` })
+  const { records: audioRecords, htmlSuffix: audioHtml, mdSuffix: audioMd, warnings: audioWarnings } = await downloadAudios(
+    parsed.audios, dir, wantAudio, deps.fetchBinary, (event) => {
+      deps.onProgress?.({ phase: 'audio', message: `下载语音 ${event.index}/${event.total}` })
+    },
+  )
+  if (audioRecords.length) meta.audios = audioRecords
+  for (const w of audioWarnings) deps.onWarning?.(w)
+
   // 告警落进 meta(M40):此前它只经 onWarning 汇进 DownloadItemResult,**只有 CLI 看得到**——
   // GUI 下载完就消失了,事后在文库里根本无从知道「这篇当时解析得可疑」。
-  // 视频告警在 buildMeta 之后才产生,所以要在写盘前合并,不能只用 parsed.warnings。
-  const allWarnings = [...parsed.warnings, ...warnings]
+  // 视频/语音告警在 buildMeta 之后才产生,所以要在写盘前合并,不能只用 parsed.warnings。
+  const allWarnings = [...parsed.warnings, ...warnings, ...audioWarnings]
   if (allWarnings.length) meta.warnings = allWarnings
 
-  // html 与 md 的视频引用形态不同（html 能内联 <video>，md 只能给链接），
-  // 且 turndown 不认识 <video> —— 所以分成两个 suffix，不能共用一份 contentHtml。
-  const htmlBody = htmlSuffix ? `${contentHtml}\n${htmlSuffix}` : contentHtml
+  // html 与 md 的音视频引用形态不同（html 能内联 <video>/<audio>，md 只能给链接），
+  // 且 turndown 不认识 <video>/<audio> —— 所以分成两个 suffix，不能共用一份 contentHtml。
+  const htmlBody = [contentHtml, htmlSuffix, audioHtml].filter(Boolean).join('\n')
+  const mdTail = [mdSuffix, audioMd].filter(Boolean).join('\n\n')
 
-  if (formats.includes('md')) await writeMarkdown(dir, meta, contentHtml, mdSuffix)
+  if (formats.includes('md')) await writeMarkdown(dir, meta, contentHtml, mdTail)
   // pdf renders from index.html, so html is written when pdf is requested even
   // if 'html' wasn't selected; index.html then remains as an intermediate file.
   if (formats.includes('html') || formats.includes('pdf')) await writeHtml(dir, meta, htmlBody)
