@@ -22,7 +22,7 @@ describe('exportArticle: failed-image data-src strip', () => {
       digest: 'Test digest',
       coverUrl: '',
       contentHtml: `<p><img data-src="${successUrl}" /></p><p><img data-src="${failUrl}" /></p>`,
-      imageUrls: [successUrl, failUrl], videos: [], itemShowType: 0, warnings: []
+      imageUrls: [successUrl, failUrl], videos: [], audios: [], itemShowType: 0, warnings: []
     }
 
     const deps: ExportDeps = {
@@ -66,7 +66,7 @@ describe('exportArticle: 告警落进 meta（M40）', () => {
   const base = (over: Partial<ParsedArticle> = {}): ParsedArticle => ({
     title: 'T', author: 'A', account: 'Acc', publishTime: '2026-07-28',
     digest: '', coverUrl: '', contentHtml: '<p>正文</p>',
-    imageUrls: [], videos: [], itemShowType: 0, warnings: [], ...over,
+    imageUrls: [], videos: [], audios: [], itemShowType: 0, warnings: [], ...over,
   })
   const deps = (): ExportDeps => ({
     fetchBinary: async () => { throw new Error('不该被调用') },

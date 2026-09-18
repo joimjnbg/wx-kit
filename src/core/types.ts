@@ -1,5 +1,6 @@
 // src/core/types.ts
 import type { MpVideoSource } from './parse-video'
+import type { MpAudioSource } from './parse-audio'
 export type DownloadFormat = 'cover' | 'md' | 'html' | 'pdf' | 'meta'
 
 // 格式 = 同一份内容的不同**表现形式**。视频不在其列：它是内容的一部分（和图片一样），
@@ -18,6 +19,7 @@ export interface ParsedArticle {
   contentHtml: string   // 清洗后的正文 HTML
   imageUrls: string[]   // 正文中出现的图片 URL（去重、按出现顺序）
   videos: MpVideoSource[] // 内嵌上传视频（mpvideo，已择最高清档）；无视频为 []
+  audios: MpAudioSource[] // 内嵌语音（mp-common-mpaudio，voice_encode_fileid 键）；无音频为 []
   itemShowType: number | null  // 消息类型（0 图文 / 5 视频 / 8 图文消息 / 10 文字 / …）；读不到为 null
   warnings: string[]           // 解析期的非致命问题（未识别类型、正文疑似脚本等）
 }
@@ -51,6 +53,14 @@ export interface ArticleMeta {
   videos?: Array<{
     videoId: string; formatId: string
     width: number; height: number; filesize: number; durationMs: number
+    path?: string
+  }>
+  /**
+   * 内嵌语音落盘记录（与视频同规：**不存 url**——getvoice 302 filekey 短窗有效，
+   * 存下来隔次就失效。`path` 为库内相对路径，未下载时缺省。
+   */
+  audios?: Array<{
+    voiceId: string; title: string; durationMs: number
     path?: string
   }>
 }

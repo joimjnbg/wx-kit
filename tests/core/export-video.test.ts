@@ -1,4 +1,4 @@
-// tests/core/export-video.test.ts
+﻿// tests/core/export-video.test.ts
 import { describe, it, expect } from 'vitest'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,7 +19,7 @@ const parsedWithVideo = (): ParsedArticle => ({
   title: '带视频的文章', author: '作者', account: '某号',
   publishTime: '2026-07-12 13:20', digest: '摘要', coverUrl: '',
   contentHtml: '<p>视频的描述文字。</p>',
-  imageUrls: [], videos: [VIDEO], itemShowType: 0, warnings: []
+  imageUrls: [], videos: [VIDEO], audios: [], itemShowType: 0, warnings: []
 })
 
 const run = async (formats: DownloadFormat[], opts: { downloadVideos?: boolean; fetchBinary?: ExportDeps['fetchBinary'] } = {}) => {
@@ -90,7 +90,7 @@ describe('exportArticle: 视频格式', () => {
 
   it('无视频的文章:不受影响,meta 无 videos 字段', async () => {
     const dir = join(mkdtempSync(join(tmpdir(), 'wxk-novid-')), 'art')
-    const parsed: ParsedArticle = { ...parsedWithVideo(), videos: [] }
+    const parsed: ParsedArticle = { ...parsedWithVideo(), videos: [], audios: [] }
     const meta = await exportArticle({ parsed, id: 'i', sourceUrl: 'https://x', dir, formats: ['md', 'meta'] }, {
       fetchBinary: async () => { throw new Error('should not be called') },
       BrowserWindowCtor: undefined as never, now: () => '2026-07-26T00:00:00.000Z',

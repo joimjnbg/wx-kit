@@ -67,6 +67,7 @@ export function noteShowToParsedArticle(r: NoteShowResult): ParsedArticle {
     contentHtml: html,
     imageUrls: urls,
     videos: [],
+    audios: [],
     itemShowType: null,
     warnings,
   }
