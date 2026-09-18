@@ -1,11 +1,11 @@
-// tests/core/export-meta.test.ts
+﻿// tests/core/export-meta.test.ts
 import { describe, it, expect } from 'vitest'
 import { buildMeta } from '../../src/core/exporter/export-meta'
 import type { ParsedArticle } from '../../src/core/types'
 
 const parsed: ParsedArticle = {
   title: 'T', author: 'A', account: 'A', publishTime: '2026-02-25 08:00',
-  digest: 'D', coverUrl: 'https://x/c', contentHtml: '<p>x</p>', imageUrls: [], videos: [], itemShowType: 0, warnings: []
+  digest: 'D', coverUrl: 'https://x/c', contentHtml: '<p>x</p>', imageUrls: [], videos: [], audios: [], itemShowType: 0, warnings: []
 }
 
 describe('buildMeta', () => {
@@ -25,7 +25,7 @@ describe('buildMeta', () => {
 describe('buildMeta 带出 v0.8.2 新字段', () => {
   const base = {
     title: 't', author: 'a', account: 'acc', publishTime: '2026-07-12 13:20',
-    digest: 'd', coverUrl: '', contentHtml: '<p>x</p>', imageUrls: [], videos: [], warnings: [],
+    digest: 'd', coverUrl: '', contentHtml: '<p>x</p>', imageUrls: [], videos: [], audios: [], warnings: [],
   }
   const ctx = { id: 'i', sourceUrl: 'https://x', dir: '/tmp/d', formats: ['meta'] as const, now: '2026-07-26T00:00:00Z' }
 

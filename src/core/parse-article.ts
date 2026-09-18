@@ -2,6 +2,7 @@
 import * as cheerio from 'cheerio'
 import type { ParsedArticle } from './types'
 import { extractMpVideos } from './parse-video'
+import { extractMpAudios } from './parse-audio'
 import { kindOf, readItemShowType, unknownKindWarning, type MessageKind } from './message-kind'
 import { parsePublicationTime } from './publication-time'
 
@@ -141,6 +142,9 @@ export function parseArticle(html: string, _sourceUrl: string): ParsedArticle {
   const itemShowType = readItemShowType(html)
   const kind = kindOf(itemShowType)
   const warnings: string[] = []
+  // 语音同视频:mp-common-mpaudio 寄生在图文页内,是附加内容,无新消息类型。
+  const { audios, warnings: audioWarnings } = extractMpAudios(html)
+  warnings.push(...audioWarnings)
 
   const $content = $('#js_content')
   // 微信图片真实地址在 data-src
@@ -209,6 +213,7 @@ export function parseArticle(html: string, _sourceUrl: string): ParsedArticle {
     contentHtml,
     imageUrls,
     videos,
+    audios,
     itemShowType,
     warnings,
   }
