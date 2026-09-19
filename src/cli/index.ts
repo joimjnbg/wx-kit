@@ -119,6 +119,7 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .option('-f, --urls-file <file>', '每行一个 URL 的文件')
     .option('--formats <csv>', '逗号分隔：cover,md,html,pdf,meta', 'md,html,meta')
     .option('--no-video', '不下载文中内嵌视频（默认会下；单个视频可达上百 MB）')
+    .option('--no-audio', '不下载文中语音（默认会下；单条通常数百 KB）')
     .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
     .action(async (opts) => {
       const urls: string[] = [...(opts.url ?? [])].map((s: string) => s.trim()).filter(Boolean)
@@ -132,8 +133,8 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
       // M49：用户明确点击/执行一次 URL 下载，就是一次新的有效动作。
       // 自动恢复旧治理状态，避免已隐藏的 protection UI 让核心下载永久卡住。
       await mpGateway().resume()
-      // commander 的 --no-video 把 opts.video 置 false；缺省为 true
-      const deps = { ...mpArticleFetchers(), BrowserWindowCtor: BrowserWindow, now: () => new Date().toISOString(), library, libraryRoot: root, downloadVideos: opts.video !== false }
+      // commander 的 --no-video/--no-audio 把 opts.video/audio 置 false；缺省为 true
+      const deps = { ...mpArticleFetchers(), BrowserWindowCtor: BrowserWindow, now: () => new Date().toISOString(), library, libraryRoot: root, downloadVideos: opts.video !== false, downloadAudios: opts.audio !== false }
 
       const queue = new DownloadQueue(
         (url) => downloadArticle(url, formats, {
@@ -235,6 +236,7 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .option('--to <date>', '结束日期 YYYY-MM-DD')
     .option('--formats <csv>', '逗号分隔：cover,md,html,pdf,meta', 'md,html,meta')
     .option('--no-video', '不下载文中内嵌视频（默认会下；单个视频可达上百 MB）')
+    .option('--no-audio', '不下载文中语音（默认会下；单条通常数百 KB）')
     .option('--include <csv>', '仅下载标题含任一关键词的文章（逗号分隔）')
     .option('--exclude <csv>', '排除标题含任一关键词的文章（逗号分隔，优先于 --include）')
     .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
@@ -452,8 +454,8 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
       const fakeids = opts.accounts ? String(opts.accounts).split(',').map((x: string) => x.trim()).filter(Boolean) : undefined
       const downloadRefs = async (refs: import('../core/mp-types').ArticleRef[], formats: DownloadFormat[], source: HistorySource) => {
         const library = new Library(root)
-        // 订阅检查没有 --no-video 开关，按设置走（与 GUI 的定时检查一致）
-        const ddeps = { ...mpArticleFetchers(), BrowserWindowCtor: BrowserWindow, now: () => new Date().toISOString(), library, libraryRoot: root, downloadVideos: s.downloadVideos }
+        // 订阅检查没有 --no-video/--no-audio 开关，按设置走（与 GUI 的定时检查一致）
+        const ddeps = { ...mpArticleFetchers(), BrowserWindowCtor: BrowserWindow, now: () => new Date().toISOString(), library, libraryRoot: root, downloadVideos: s.downloadVideos, downloadAudios: s.downloadAudios }
         const queue = new DownloadQueue((url, hint, report) => downloadArticle(url, formats, { ...ddeps, onProgress: report }, hint))
         // 透传列表给的文章主键:订阅拿到的是短链,没 hint 会退化成哈希 id → 与「按公众号」抓的同一篇算两篇
         const summary = await queue.run(refs.map((r) => ({ url: r.url, appmsgid: r.appmsgid, itemidx: r.itemidx })))
@@ -482,6 +484,7 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .option('--download', '仅限今天：刷新最新 cover、下载缺失文章，再从文库返回当天清单')
     .option('--formats <csv>', '仅配合 --download:cover,md,html,pdf,meta(默认跟随设置)')
     .option('--no-video', '仅配合 --download:不下载文中视频')
+    .option('--no-audio', '仅配合 --download:不下载文中语音')
     .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
     .action(async (o) => {
       const now = Date.now()
@@ -521,6 +524,7 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
           ...mpArticleFetchers(), BrowserWindowCtor: BrowserWindow, library, libraryRoot: root,
           now: () => new Date().toISOString(),
           downloadVideos: o.video === false ? false : settings.downloadVideos,
+          downloadAudios: o.audio === false ? false : settings.downloadAudios,
         }
         failures = await refreshDigest(accounts, {
           latest: (fakeid) => client.getLatestArticle(fakeid),

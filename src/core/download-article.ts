@@ -21,6 +21,8 @@ export interface DownloadArticleDeps extends ExportDeps {
   libraryRoot: string
   /** 是否下载文中视频（设置项，默认 true）。视频是内容不是格式，故不走 formats。 */
   downloadVideos?: boolean
+  /** 是否下载文中语音（设置项，默认 true）。语音是内容不是格式，故不走 formats。 */
+  downloadAudios?: boolean
   accountId?: string
   onProgress?: (stage: { phase: import('./types').ProgressPhase; message?: string }) => void
 }
@@ -142,7 +144,7 @@ export async function downloadArticle(
     try { accountId = normalizeAccountId(rawAccountId) } catch { /* 无可靠身份时仍保存正文 */ }
   }
   deps.onProgress?.({ phase: 'export', message: '生成文件' })
-  const meta = await exportArticle({ parsed, id, sourceUrl: url, dir, formats, downloadVideos: deps.downloadVideos, accountId },
+  const meta = await exportArticle({ parsed, id, sourceUrl: url, dir, formats, downloadVideos: deps.downloadVideos, downloadAudios: deps.downloadAudios, accountId },
     { ...deps, onWarning: (m) => { warnings.push(m); deps.onWarning?.(m) } })
   await deps.library.add(meta)
 
