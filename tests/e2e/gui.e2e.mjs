@@ -604,7 +604,7 @@ async function main() {
     const libAfter = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
     assert(libAfter.length >= 1, `sync download keeps library rows (got ${libAfter.length})`)
 
-    // URL 清单模式:粘贴两条 fixture 链接 → 解析成行 → 取消一行收缩计算集 → 下载落盘
+    // URL 清单模式:粘贴两条 fixture 链接 → 解析成行(与订阅行合并,anzahl wächst) → 取消一行收缩计算集
     await win.fill('[data-testid="sync-url-list"]', [urlOf('a2'), urlOf('a3'), 'not-a-url'].join('\n'))
     await win.click('[data-testid="sync-resolve-urls"]')
     await win.waitForFunction(() => {
@@ -612,7 +612,7 @@ async function main() {
       return el && el.textContent !== ''
     }, undefined, { timeout: 10000 })
     const urlCount = await win.locator('[data-testid="sync-pick-count"]').innerText()
-    assert(urlCount.includes('3 / 3') || urlCount.includes('2 /'), `url list resolves rows (got ${urlCount})`)
+    assert(!urlCount.includes('/ 1 篇'), `url list adds rows (got ${urlCount})`)
     const invalidNote = await win.locator('[data-testid="sync-url-invalid"]').count()
     assert(invalidNote === 1, 'invalid url row flagged inline')
     // 取消一行收缩计算集(行级复选框首个),再勾回恢复
