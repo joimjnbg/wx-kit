@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Checkbox, Input, List, Select, Spin, Tag, message } from 'antd'
 import { api, type MpSessionInfo, type SubscribedAccount } from '../api'
 import { sessionHint } from '../sync-view'
-import { buildSyncRows, computePicked, mergeSyncRows, pickSummary, type SyncRow } from '../sync-rows'
+import { buildSyncRows, computePicked, mergeSyncRows, pickSummary, syncRefId, type SyncRow } from '../sync-rows'
+import { resolveUrlText } from '../../core/resolve-urls'
 
 // 同步页(票据 02a):Seed URL 确认账号或已选订阅账号 → 待处理行 + 已存档标记。
 // 选择器与下载接线见后续票据;本页负责入口、行列表与登录态。
@@ -38,13 +39,37 @@ export default function Sync() {
     const targets = ids ?? picked.map((p) => p.refId)
     if (!targets.length || downloading) return
     const target = accountId ?? confirmed?.fakeid
-    if (!target) { message.warning('请先同步确认账号'); return }
     setDownloading(true)
     // 进度标记:广播不到时(如单测外)至少显示"下载中",下载结束清除
     const progressTimer = setTimeout(() => {
       setDlProgress((cur) => cur ?? { done: 0, total: targets.length, phase: 'downloading' })
     }, 1500)
     try {
+      // URL 清单行无订阅归属:走通用 download(按 URL),订阅行走 subscriptionsDownloadNew(按 refId)
+      const urlById = new Map(rows.map((r) => [r.refId, r.url] as const))
+      const urlTargets = targets.map((id) => urlById.get(id)).filter((u): u is string => !!u)
+      if (!target) {
+        const summary = await api.download(urlTargets, ['md', 'html', 'meta'])
+        if (summary.failed > 0) message.warning(`已下载 ${summary.succeeded} 篇,还有 ${summary.failed} 篇未成功,可重试`)
+        else message.success(`已下载 ${summary.succeeded} 篇${summary.skipped ? `,${summary.skipped} 篇文库已有` : ''}`)
+        setResultById((prev) => {
+          const next = { ...prev }
+          for (const item of summary.items) {
+            const id = [...urlById.entries()].find(([, u]) => u === item.url)?.[0]
+            if (!id) continue
+            next[id] = item.ok ? { status: 'ok' } : { status: 'failed', message: item.error?.message ?? '未成功,可重试' }
+          }
+          return next
+        })
+        // 标题回填:下载后按库标题刷新 URL 清单行(解析时只有 URL)
+        const lib = await api.libraryList()
+        const byUrl = new Map(lib.map((m) => [m.sourceUrl, m] as const))
+        setRows((prev) => prev.map((r) => {
+          const hit = byUrl.get(r.url)
+          return hit ? { ...r, title: hit.title } : r
+        }))
+        return
+      }
       const r = await api.subscriptionsDownloadNew(target, targets)
       const kept = r?.kept ?? 0
       if (kept > 0) message.warning(`已下载 ${r?.downloaded ?? 0} 篇,还有 ${kept} 篇未成功,可重试`)
@@ -161,6 +186,40 @@ export default function Sync() {
     }
   }
 
+  // URL 清单模式(urllist):多条链接文本 → 解析成行(标题待下载时回填),与订阅行同管线
+  const [urlText, setUrlText] = useState('')
+  const [urlInvalid, setUrlInvalid] = useState<string[]>([])
+  const [resolving, setResolving] = useState(false)
+
+  const resolveUrlList = async () => {
+    const resolved = resolveUrlText(urlText)
+    const bad = resolved.items.filter((i) => !i.valid).map((i) => i.url)
+    setUrlInvalid(bad)
+    const good = resolved.items.filter((i) => i.valid)
+    if (!good.length) { message.warning('没有有效文章链接'); return }
+    setResolving(true)
+    try {
+      const lib = await api.libraryList()
+      const archivedIds = new Set(lib.map((m) => m.id))
+      const archivedUrls = new Set(lib.map((m) => m.sourceUrl))
+      // 行标题待下载回填:先以 URL 为题占位,下载后按库标题刷新
+      const inputs = good.map((g) => ({
+        url: g.url, title: g.url,
+        createTime: Math.floor(Date.now() / 1000),
+        ...(g.appmsgid != null ? { appmsgid: g.appmsgid } : {}),
+        ...(g.itemidx != null ? { itemidx: g.itemidx } : {}),
+      }))
+      const next = buildSyncRows(inputs, { archivedIds, archivedUrls })
+      setRows((prev) => mergeSyncRows(prev, next))
+      const freshIds = next.map((n) => n.refId)
+      setChecked((prev) => new Set([...prev, ...freshIds]))
+      setTouched((prev) => new Set([...prev, ...freshIds]))
+      setUrlText('')
+    } finally {
+      setResolving(false)
+    }
+  }
+
   if (loading) return <div className="page"><Spin data-testid="sync-loading" /></div>
   if (failed) return <div className="page" data-testid="sync-page"><Alert data-testid="sync-load-error" type="error" message="同步页加载失败,请重试" /></div>
   // 登录态双源:订阅检查结论(authExpired)优先,会话探测(mpSessionInfo)次之
@@ -179,6 +238,16 @@ export default function Sync() {
             value={accountId} onChange={(v) => setAccountId(v)}
             options={accounts.map((a) => ({ label: a.nickname, value: a.fakeid }))} /></span>
           <Button data-testid="sync-run" type="primary" loading={syncing} onClick={runSync}>同步</Button>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <Input.TextArea data-testid="sync-url-list" rows={3} placeholder="或粘贴多条文章链接(每行一条),解析成行后勾选下载"
+            value={urlText} onChange={(e) => setUrlText(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <Button data-testid="sync-resolve-urls" loading={resolving} onClick={resolveUrlList}>解析链接成行</Button>
+            {urlInvalid.length > 0 && (
+              <span data-testid="sync-url-invalid">无效 {urlInvalid.length} 条:{urlInvalid.slice(0, 3).join('、')}</span>
+            )}
+          </div>
         </div>
         {confirmed && (
           <Alert data-testid="sync-confirmed" type="success" style={{ marginTop: 8 }}

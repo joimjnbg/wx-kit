@@ -604,6 +604,18 @@ async function main() {
     const libAfter = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
     assert(libAfter.length >= 1, `sync download keeps library rows (got ${libAfter.length})`)
 
+    // URL 清单模式:粘贴两条 fixture 链接 → 解析成行 → 取消一行收缩计算集
+    await win.fill('[data-testid="sync-url-list"]', [urlOf('a2'), urlOf('a3'), 'not-a-url'].join('\n'))
+    await win.click('[data-testid="sync-resolve-urls"]')
+    await win.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="sync-pick-count"]')
+      return el && el.textContent !== ''
+    }, undefined, { timeout: 10000 })
+    const urlCount = await win.locator('[data-testid="sync-pick-count"]').innerText()
+    assert(urlCount.includes('3 / 3') || urlCount.includes('2 /'), `url list resolves rows (got ${urlCount})`)
+    const invalidNote = await win.locator('[data-testid="sync-url-invalid"]').count()
+    assert(invalidNote === 1, 'invalid url row flagged inline')
+
     await win.screenshot({ path: '/tmp/wxk-e2e-final.png' })
     assert(errors.length === 0, `no console/page errors (saw ${errors.length}: ${errors.slice(0, 3).join(' | ')})`)
 
