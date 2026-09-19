@@ -43,6 +43,16 @@ describe('applyPick 两层选择器', () => {
   })
 })
 
+describe('applyPick 下载维度键', () => {
+  it('images/audio 不参与条目筛选:关闭也不剔除条目(下载阶段消费)', () => {
+    const out = applyPick(
+      { refs: [ref({ url: 'u1', itemShowType: 0 })] },
+      { types: { images: false, audio: false } },
+    )
+    expect(out.items.map((i) => i.url)).toEqual(['u1'])
+  })
+})
+
 describe('shouldDownloadAudio 下载维度开关', () => {
   it('audio:false 或总开关关都停语音;默认开', () => {
     expect(shouldDownloadAudio({ audio: false }, true)).toBe(false)

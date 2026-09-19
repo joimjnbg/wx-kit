@@ -56,6 +56,12 @@ describe('download 音频接线(票据 voice-03)', () => {
     expect(meta.audios).toHaveLength(1)
     expect(meta.audios?.[0]).toMatchObject({ voiceId: 'VOICE1', path: 'audios/audio-1.mp3' })
     expect(network.binary.mock.calls.some((c) => String(c[0]).includes('getvoice'))).toBe(true)
+    // 文件真实落盘(不只记 meta)
+    const { existsSync, readFileSync } = await import('node:fs')
+    const { join: joinPath } = await import('node:path')
+    const p = joinPath(meta.dir, 'audios', 'audio-1.mp3')
+    expect(existsSync(p)).toBe(true)
+    expect(readFileSync(p).toString()).toBe('MP3')
   })
 
   it('--no-audio 跳过:不请求 getvoice,记录无路径,正文留说明', async () => {
@@ -65,5 +71,12 @@ describe('download 音频接线(票据 voice-03)', () => {
     expect(network.binary.mock.calls.some((c) => String(c[0]).includes('getvoice'))).toBe(false)
     const [meta] = await new Library(root).list()
     expect(meta.audios?.[0]?.path).toBeUndefined()
+    // 说明落进正文(md 后缀),不是静默跳过
+    const { readFileSync } = await import('node:fs')
+    const { join: joinPath } = await import('node:path')
+    const md = readFileSync(joinPath(meta.dir, 'content.md'), 'utf-8')
+    expect(md).toContain('未下载')
+    // JSON 汇总区分音频告警(不混入文章失败)
+    expect(result).toMatchObject({ ok: true, succeeded: 1 })
   })
 })

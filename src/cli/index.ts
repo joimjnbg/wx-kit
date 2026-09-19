@@ -21,7 +21,7 @@ import { rebuildLibrary } from '../core/rebuild-library'
 import { checkUpdate } from '../core/check-update'
 import { detectChannel, upgradeCommand } from '../core/install-channel'
 import { selectArticles, buildManifest } from '../core/material-export'
-import { applyPick, pickId } from '../core/pick-articles'
+import { applyPick, pickId, shouldDownloadAudio } from '../core/pick-articles'
 import { sortArticles } from '../core/library-sort'
 import { syncToSite } from '../core/site-sync'
 import { detectMocli } from '../core/mowen/detect'
@@ -394,9 +394,12 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
         const subs = new Subscriptions(root)
         const refs = (await subs.list()).filter((a) => a.subscribed).flatMap((a) => a.newRefs)
         const { items, total } = applyPick({ refs }, sel)
+        const settings = await settingsFor().get()
         outJson({
           ok: true, total,
           count: items.length,
+          // 下载维度开关随选择集返回,调用方无需二次查询设置
+          downloadAudios: shouldDownloadAudio(sel.types, settings.downloadAudios),
           items: items.map((r) => ({
             refId: pickId(r), url: r.url, title: r.title, createTime: r.createTime,
             ...(r.itemShowType != null ? { itemShowType: r.itemShowType } : {}),
