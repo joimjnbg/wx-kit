@@ -36,7 +36,7 @@ function parseOne(raw: string): ResolvedUrl {
   const url = raw.trim()
   let u: URL | null = null
   try { u = new URL(url) } catch { /* 下方判无效 */ }
-  if (!u || u.hostname !== 'mp.weixin.qq.com' || !u.pathname.startsWith('/s')) {
+  if (!u || u.hostname !== 'mp.weixin.qq.com' || !/^\/s(\/|$|\?)/.test(u.pathname)) {
     return { url, valid: false, reason: '不是微信文章链接(mp.weixin.qq.com/s/...)' }
   }
   const out: ResolvedUrl = { url, valid: true }
@@ -49,24 +49,21 @@ function parseOne(raw: string): ResolvedUrl {
   return out
 }
 
-/** 解析多行 URL 文本:空行跳过但计入 total;重复按归一化合并。 */
+/** 解析多行 URL 文本:空行跳过,不计入 total;重复按归一化合并。 */
 export function resolveUrlText(text: string): ResolveUrlsResult {
   const lines = text.split(/\r?\n/)
   const total = lines.filter((l) => l.trim()).length
   const items: ResolvedUrl[] = []
-  const seen = new Set<string>()
+  const seen = new Map<string, ResolvedUrl>()
   for (const line of lines) {
     const t = line.trim()
     if (!t) continue
     const r = parseOne(t)
     if (!r.valid) { items.push(r); continue }
     const key = urlKey(r.url)
-    if (seen.has(key)) {
-      const first = items.find((i) => i.valid && urlKey(i.url) === key)
-      if (first) first.duplicate = true
-      continue
-    }
-    seen.add(key)
+    const first = seen.get(key)
+    if (first) { first.duplicate = true; continue }
+    seen.set(key, r)
     items.push(r)
   }
   return { items, total }
