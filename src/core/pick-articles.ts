@@ -23,13 +23,19 @@ export function pickId(ref: ArticleRef): string {
 }
 
 /** 类型开关是否命中该条目:text 覆盖图文/图片/文字/通告与未知,video 覆盖视频消息。
- * images/audio 是下载维度(随正文/附件落地,见Exporter的wantImages/downloadVideos),
+ * images/audio 是下载维度(随正文/附件落地,见Exporter的wantImages/downloadAudios),
  * 不参与条目筛选——v1 按条目类型只分 text/video 两档。 */
 function typeEnabled(ref: ArticleRef, types: PickTypes): boolean {
   void types.images
   void types.audio
   if (ref.itemShowType === 5) return types.video !== false
   return types.text !== false
+}
+
+/** 该条目是否应下载语音附件:条目入选且 audio 开关开(下载维度,不影响行过滤)。 */
+export function shouldDownloadAudio(types: PickTypes | undefined, downloadAudios: boolean): boolean {
+  if (!downloadAudios) return false
+  return types?.audio !== false
 }
 
 export interface PickResult { items: ArticleRef[]; total: number }

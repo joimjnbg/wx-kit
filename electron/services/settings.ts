@@ -13,6 +13,8 @@ export interface AppSettings {
   /** 下载文中内嵌视频(M35):默认开。视频是内容不是格式,故不进 defaultFormats;
    *  留开关让 URL 下载时可以控制上百 MB 的单个视频。 */
   downloadVideos: boolean
+  /** 文中语音(voice-03):缺省下载,与视频同为内容维度,不进 defaultFormats。 */
+  downloadAudios: boolean
   /** 启动时静默检查新版本(M37):默认开。只请求 GitHub 的 releases/latest,不上传任何数据 */
   updateCheckEnabled: boolean
   /** 上次检查更新的时刻,用于「每天最多自动查一次」 */
@@ -55,6 +57,7 @@ export class SettingsService {
       libraryRoot: this.defaultLibraryRoot,
       defaultFormats: ['md', 'html', 'meta'],
       downloadVideos: true,
+      downloadAudios: true,
       updateCheckEnabled: true,
       lastUpdateCheckAt: null,
       lastKnownRelease: null,

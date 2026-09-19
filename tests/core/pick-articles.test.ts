@@ -1,7 +1,7 @@
 // tests/core/pick-articles.test.ts
 // 票据 05 RED:两层选择器的纯函数契约尚不存在。
 import { describe, expect, it } from 'vitest'
-import { applyPick, type PickInput } from '../../src/core/pick-articles'
+import { applyPick, shouldDownloadAudio, type PickInput } from '../../src/core/pick-articles'
 
 const ref = (over: Partial<PickInput['refs'][number]> & { url: string }) => ({
   title: 't', createTime: 1, ...over,
@@ -50,5 +50,14 @@ describe('applyPick 下载维度键', () => {
       { types: { images: false, audio: false } },
     )
     expect(out.items.map((i) => i.url)).toEqual(['u1'])
+  })
+})
+
+describe('shouldDownloadAudio 下载维度开关', () => {
+  it('audio:false 或总开关关都停语音;默认开', () => {
+    expect(shouldDownloadAudio({ audio: false }, true)).toBe(false)
+    expect(shouldDownloadAudio({ audio: true }, false)).toBe(false)
+    expect(shouldDownloadAudio(undefined, true)).toBe(true)
+    expect(shouldDownloadAudio({}, true)).toBe(true)
   })
 })
