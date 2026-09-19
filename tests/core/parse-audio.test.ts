@@ -25,6 +25,13 @@ describe('extractMpAudios', () => {
     expect(a.url).toContain('res.wx.qq.com/voice/getvoice?mediaid=MzI0OTYwNjE4MF8yMjQ3NTQwOTkz')
   })
 
+  it('name 不误命中 data-pluginname=insertaudio(真实现场回归)', () => {
+    const tag = `<mp-common-mpaudio class="js_editor_audio" data-pluginname="insertaudio" name="U1&nbsp;Wrapping Up" voice_encode_fileid="V1" play_length="30000"></mp-common-mpaudio>`
+    const [a] = extractMpAudios(page(tag)).audios
+    expect(a.title).toContain('U1')
+    expect(a.title).not.toBe('insertaudio')
+  })
+
   it('两份拷贝(content/content_noencode)按 fileid 去重', () => {
     const html = page(`${el()}<div>${el()}</div>`)
     expect(extractMpAudios(html).audios).toHaveLength(1)

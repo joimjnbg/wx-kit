@@ -23,7 +23,9 @@ export interface ExtractAudiosResult {
 const GETVOICE = 'https://res.wx.qq.com/voice/getvoice?mediaid='
 
 function voiceAttr(tag: string, name: string): string {
-  const m = tag.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`)) ?? tag.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`))
+  // data-pluginname="insertaudio" 与 name="..." 并存:必须锚定词首,防止 data-* 前缀误命中
+  const m = tag.match(new RegExp(`(?:\\s|^)${name}\\s*=\\s*"([^"]*)"`))
+    ?? tag.match(new RegExp(`(?:\\s|^)${name}\\s*=\\s*'([^']*)'`))
   return (m?.[1] ?? '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&#61;/g, '=').trim()
 }
 
