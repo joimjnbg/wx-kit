@@ -19,9 +19,11 @@ vi.mock('../../electron/services/mp-runtime', async (original) => ({
 import { runCli } from '../../src/cli'
 import { Library } from '../../src/core/library'
 
-const page = (title: string, mid: string) =>
+const page = (title: string, mid: string, audio = false) =>
   `<html><body><h1 id="activity-name">${title}</h1><span id="js_name">清单号</span>`
-  + `<em id="publish_time">2026-09-19 08:00</em><div id="js_content"><p>正文</p></div>`
+  + `<em id="publish_time">2026-09-19 08:00</em><div id="js_content"><p>正文</p>`
+  + (audio ? `<mp-common-mpaudio voice_encode_fileid="VOICEX" name="U1" play_length="30000"></mp-common-mpaudio>` : '')
+  + `</div>`
   + `<script>var biz = "MzYzNDg1MDcyNQ=="; var mid = "${mid}"; var idx = "2";</script></body></html>`
 
 let root: string, userDataDir: string, stdout: string
@@ -35,7 +37,10 @@ beforeEach(async () => {
   network.gateway.mockResolvedValue({})
   network.html.mockImplementation(async (_kind: string, url: string) =>
     url.includes('aaa1') ? page('文:aaa1', '2247540994') : page(`文:${url.slice(-4)}`, '2247540995'))
-  network.binary.mockResolvedValue({ data: Buffer.from('img'), contentType: 'image/jpeg' })
+  network.binary.mockImplementation(async (url: string) => {
+    if (String(url).includes('getvoice')) return { data: Buffer.from('MP3'), contentType: 'audio/mpeg' }
+    return { data: Buffer.from('img'), contentType: 'image/jpeg' }
+  })
 })
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -69,5 +74,20 @@ describe('download URL 清单(票据 urllist-02)', () => {
     expect(result.failed).toBe(1)
     expect(result.items[1]).toMatchObject({ ok: false })
     expect(code).toBe(1)
+  })
+
+  it('含语音文章默认落音频;--no-audio 跳过且正文留说明', async () => {
+    network.html.mockImplementation(async (_kind: string, url: string) =>
+      url.includes('audx2') ? page('语音文2', '2247540997') : page('语音文', '2247540996', true))
+    const { result } = await run('--url', 'https://mp.weixin.qq.com/s/audx')
+    expect(result.succeeded).toBe(1)
+    const [meta] = await new Library(root).list()
+    expect(meta.audios).toHaveLength(1)
+    expect(meta.audios?.[0].path).toBe('audios/audio-1.mp3')
+    const { result: r2 } = await run('--url', 'https://mp.weixin.qq.com/s/audx2', '--no-audio')
+    expect(r2.succeeded).toBe(1)
+    const lib = await new Library(root).list()
+    expect(lib).toHaveLength(2)
+    expect(lib[1].audios ?? []).toHaveLength(0)
   })
 })

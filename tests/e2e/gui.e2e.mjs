@@ -604,8 +604,10 @@ async function main() {
     const libAfter = JSON.parse(readFileSync(join(libraryRoot, 'library.json'), 'utf8')).articles
     assert(libAfter.length >= 1, `sync download keeps library rows (got ${libAfter.length})`)
 
-    // URL 清单模式:粘贴两条 fixture 链接 → 解析成行(与订阅行合并,anzahl wächst) → 取消一行收缩计算集
-    await win.fill('[data-testid="sync-url-list"]', [urlOf('a2'), urlOf('a3'), 'not-a-url'].join('\n'))
+    // URL 清单模式:粘贴 fixture 外链(a9/a10 未下载过) → 解析成行,行数增长;
+    // a2/a3 已在库/待处理中,避免复用导致合并无变化
+    const urlCountBefore = await win.locator('[data-testid="sync-pick-count"]').innerText()
+    await win.fill('[data-testid="sync-url-list"]', ['https://mp.weixin.qq.com/s/e2e9', 'https://mp.weixin.qq.com/s/e2e10', 'not-a-url'].join('\n'))
     await win.click('[data-testid="sync-resolve-urls"]')
     await win.waitForFunction(() => {
       const el = document.querySelector('[data-testid="sync-pick-count"]')

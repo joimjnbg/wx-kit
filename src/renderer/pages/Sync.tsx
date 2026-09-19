@@ -198,17 +198,17 @@ export default function Sync() {
     }
   }
 
-  // URL 清单模式(urllist):多条链接文本 → 解析成行(标题待下载时回填),与订阅行同管线
+  // URL 清单模式(urllist):多条链接文本或 txt 文件 → 解析成行(标题待下载时回填),与订阅行同管线
   const [urlText, setUrlText] = useState('')
   const [urlInvalid, setUrlInvalid] = useState<string[]>([])
   const [resolving, setResolving] = useState(false)
 
-  const resolveUrlList = async () => {
-    const resolved = resolveUrlText(urlText)
+  const resolveText = async (text: string) => {
+    const resolved = resolveUrlText(text)
     const bad = resolved.items.filter((i) => !i.valid).map((i) => i.url)
     setUrlInvalid(bad)
     const good = resolved.items.filter((i) => i.valid)
-    if (!good.length) { message.warning('没有有效文章链接'); return }
+    if (!good.length) { message.warning('没有有效文章链接'); return 0 }
     setResolving(true)
     try {
       const lib = await api.libraryList()
@@ -226,10 +226,18 @@ export default function Sync() {
       const freshIds = next.map((n) => n.refId)
       setChecked((prev) => new Set([...prev, ...freshIds]))
       setTouched((prev) => new Set([...prev, ...freshIds]))
-      setUrlText('')
+      return next.length
     } finally {
       setResolving(false)
     }
+  }
+
+  const resolveUrlList = () => resolveText(urlText).then((n) => { if (n > 0) setUrlText('') })
+
+  const importUrlFile = async (file: File) => {
+    const text = await file.text()
+    setUrlText(text)
+    await resolveText(text)
   }
 
   if (loading) return <div className="page"><Spin data-testid="sync-loading" /></div>
@@ -256,6 +264,14 @@ export default function Sync() {
             value={urlText} onChange={(e) => setUrlText(e.target.value)} />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <Button data-testid="sync-resolve-urls" loading={resolving} onClick={resolveUrlList}>解析链接成行</Button>
+            <label data-testid="sync-import-file" style={{ alignSelf: 'center', cursor: 'pointer', color: '#1677ff' }}>
+              导入 txt
+              <input type="file" accept=".txt,text/plain" hidden onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void importUrlFile(f)
+                e.target.value = ''
+              }} />
+            </label>
             {urlInvalid.length > 0 && (
               <span data-testid="sync-url-invalid">无效 {urlInvalid.length} 条:{urlInvalid.slice(0, 3).join('、')}</span>
             )}
