@@ -122,11 +122,18 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
     .option('--no-audio', '不下载文中语音（默认会下；单条通常数百 KB）')
     .option('-o, --out <dir>', '文章库根目录（默认取设置中的库位置）')
     .action(async (opts) => {
-      const urls: string[] = [...(opts.url ?? [])].map((s: string) => s.trim()).filter(Boolean)
+      const { resolveUrlText } = await import('../core/resolve-urls')
+      const raw: string[] = [...(opts.url ?? [])].map((s: string) => s.trim()).filter(Boolean)
       if (opts.urlsFile) {
-        urls.push(...readFileSync(opts.urlsFile, 'utf-8').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean))
+        raw.push(...readFileSync(opts.urlsFile, 'utf-8').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean))
       }
-      if (!urls.length) throw new Error('no urls; use --url or --urls-file')
+      if (!raw.length) throw new Error('no urls; use --url or --urls-file')
+      // URL 清单先过纯 resolver:无效行记失败、不进下载队列(有效照下、无效不炸整批)
+      const resolved = resolveUrlText(raw.join('\n'))
+      const urls = resolved.items.filter((i) => i.valid).map((i) => i.url)
+      const invalidItems = resolved.items.filter((i) => !i.valid).map((i) => ({
+        url: i.url, ok: false as const, error: { code: 'INVALID_URL', message: i.reason ?? '无效链接' },
+      }))
       const formats = parseFormats(opts.formats)
       const root = await resolveRoot(opts.out)
       const library = new Library(root)
@@ -146,8 +153,16 @@ export async function runCli(argv: string[], opts: { version?: string; userDataD
         (e) => process.stderr.write(`[${e.completed}/${e.total}] ${e.phase} ${e.currentUrl}${e.message ? ' ' + e.message : ''}\n`),
       )
       const summary = await queue.run(urls)
-      out(summary)
-      exitCode = summary.ok ? 0 : 1
+      // 无效行并入汇总:total 含无效,failed 累加,ok 照此重算(有效照下、无效不炸整批)
+      const merged = {
+        ...summary,
+        total: summary.total + invalidItems.length,
+        failed: summary.failed + invalidItems.length,
+        ok: summary.failed + invalidItems.length === 0,
+        items: [...summary.items, ...invalidItems],
+      }
+      out(merged)
+      exitCode = merged.ok ? 0 : 1
     })
 
   program
