@@ -47,15 +47,27 @@ export default function Sync() {
     try {
       // URL 清单行无订阅归属:走通用 download(按 URL),订阅行走 subscriptionsDownloadNew(按 refId)
       const urlById = new Map(rows.map((r) => [r.refId, r.url] as const))
+      // 短链变体归一(~/→_):反查与回填不因形态漏行
+      const normUrl = (raw: string): string => {
+        try {
+          const u = new URL(raw)
+          if (u.hostname === 'mp.weixin.qq.com' && u.pathname.startsWith('/s/')) {
+            return `${u.origin}${u.pathname.replace(/~/g, '_')}`
+          }
+        } catch { /* 非 URL 保持原值 */ }
+        return raw
+      }
+      const normByUrl = new Map(rows.map((r) => [normUrl(r.url), r.refId] as const))
       const urlTargets = targets.map((id) => urlById.get(id)).filter((u): u is string => !!u)
       if (!target) {
-        const summary = await api.download(urlTargets, ['md', 'html', 'meta'])
+        const settings = await api.getSettings().catch(() => null)
+        const summary = await api.download(urlTargets, settings?.defaultFormats ?? ['md', 'html', 'meta'])
         if (summary.failed > 0) message.warning(`已下载 ${summary.succeeded} 篇,还有 ${summary.failed} 篇未成功,可重试`)
         else message.success(`已下载 ${summary.succeeded} 篇${summary.skipped ? `,${summary.skipped} 篇文库已有` : ''}`)
         setResultById((prev) => {
           const next = { ...prev }
           for (const item of summary.items) {
-            const id = [...urlById.entries()].find(([, u]) => u === item.url)?.[0]
+            const id = normByUrl.get(normUrl(item.url))
             if (!id) continue
             next[id] = item.ok ? { status: 'ok' } : { status: 'failed', message: item.error?.message ?? '未成功,可重试' }
           }
@@ -63,9 +75,9 @@ export default function Sync() {
         })
         // 标题回填:下载后按库标题刷新 URL 清单行(解析时只有 URL)
         const lib = await api.libraryList()
-        const byUrl = new Map(lib.map((m) => [m.sourceUrl, m] as const))
+        const byUrl = new Map(lib.map((m) => [normUrl(m.sourceUrl), m] as const))
         setRows((prev) => prev.map((r) => {
-          const hit = byUrl.get(r.url)
+          const hit = byUrl.get(normUrl(r.url))
           return hit ? { ...r, title: hit.title } : r
         }))
         return
