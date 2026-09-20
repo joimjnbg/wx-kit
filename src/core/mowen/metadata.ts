@@ -66,14 +66,42 @@ function mapNoteItem(id: string, n: Record<string, unknown>): MowenNoteListItem 
   }
 }
 
-/** note_ids 顺序为准映射 notes map → 清单项数组（homepage/mine/search 共用）。 */
+/** reply.users → 完整 MowenUser[]（M65：全站搜索响应带作者映射，GUI 作者联动需要
+ *  完整对象——不只名字，还有 intro/homeUrl）。无 users 键 → 空数组。 */
+export function mapReplyUsers(reply: Record<string, unknown>): MowenUser[] {
+  const users = isObj(reply.users) ? reply.users : {}
+  const out: MowenUser[] = []
+  for (const u of Object.values(users)) {
+    if (!isObj(u)) continue
+    const uid = str(u.uid)
+    if (!uid) continue
+    out.push({ uid, name: str(u.name), intro: str(u.intro), homeUrl: str(u.home_url) })
+  }
+  return out
+}
+
+/** note_ids 顺序为准映射 notes map → 清单项数组（homepage/mine/search 共用）。
+ *  M65：搜索响应的 reply.users 按 uid 拼出条目 authorName（homepage 无该键则不设）。 */
 export function mapNoteList(reply: Record<string, unknown>): MowenNoteListItem[] {
   const ids = Array.isArray(reply.note_ids) ? reply.note_ids.map(str).filter(Boolean) : []
   const notes = isObj(reply.notes) ? reply.notes : {}
+  const users = isObj(reply.users) ? reply.users : {}
+  const authorOf = (uid: string): string | undefined => {
+    const u = users[uid]
+    const name = isObj(u) ? str(u.name) : ''
+    return name || undefined
+  }
   const out: MowenNoteListItem[] = []
   for (const id of ids) {
     const n = notes[id]
-    out.push(isObj(n) ? mapNoteItem(id, n) : { noteId: id, uid: '', title: '', brief: '', url: '', publicAt: null, withFee: false, withImage: false, withText: false, wordCount: null, viewCount: null, favorCount: null })
+    if (isObj(n)) {
+      const item = mapNoteItem(id, n)
+      const author = authorOf(item.uid)
+      if (author) item.authorName = author
+      out.push(item)
+    } else {
+      out.push({ noteId: id, uid: '', title: '', brief: '', url: '', publicAt: null, withFee: false, withImage: false, withText: false, wordCount: null, viewCount: null, favorCount: null })
+    }
   }
   return out
 }
