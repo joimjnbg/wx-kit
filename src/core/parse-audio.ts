@@ -4,7 +4,8 @@
 // readtemplate audio_tmpl 的 src 是展示占位,不可下载,直接忽略。
 // 端点证据见 docs/superpowers/spikes/2026-09-18-wechat-voice-download.md。
 
-/** 单条语音的解析结果(url 为 session 内有效的 getvoice 直链,不持久化)。 */
+/** 单条语音的解析结果(url 为 session 内有效的 getvoice 直链,不持久化)。
+ * index 为其在正文中的出现序号(从 0 起),供导出时原位回填。 */
 export interface MpAudioSource {
   voiceId: string
   url: string
@@ -12,6 +13,7 @@ export interface MpAudioSource {
   durationMs: number
   filesizeHint: number
   cover: string
+  index: number
   listenId?: string
 }
 
@@ -62,12 +64,14 @@ function listenMap(html: string): Map<string, string> {
   return out
 }
 
-/** 从整页 html 提取语音列表,按 voiceId 去重(content 与 content_noencode 是同一拷贝)。 */
+/** 从整页 html 提取语音列表。顺序 = 正文出现顺序(导出原位回填依赖);
+ * 去重按 voiceId(content 与 content_noencode 是同一拷贝)。 */
 export function extractMpAudios(html: string): ExtractAudiosResult {
   const audios: MpAudioSource[] = []
   const warnings: string[] = []
   const seen = new Set<string>()
   const listen = listenMap(html)
+  let index = 0
   for (const tag of html.matchAll(/<mp-common-mpaudio\b[^>]*>/g)) {
     const t = tag[0]
     const voiceId = normVoiceId(voiceAttr(t, 'voice_encode_fileid'))
@@ -86,6 +90,7 @@ export function extractMpAudios(html: string): ExtractAudiosResult {
       durationMs: voiceNum(t, 'play_length'),
       filesizeHint: voiceNum(t, 'high_size') || voiceNum(t, 'source_size'),
       cover: voiceAttr(t, 'cover'),
+      index: index++,
       ...(listen.get(voiceId) ? { listenId: listen.get(voiceId)! } : {}),
     })
   }
