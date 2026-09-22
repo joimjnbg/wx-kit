@@ -62,11 +62,16 @@ td.addRule('gfmTable', {
 
 // 墨问音频（M61）：turndown 不认识 <audio>，默认整块丢弃——音频 URL 就没了。
 // 不落地是 PRD 决定（内容不是格式），但链接至少要留在 md 里：转成 [音频](url) 一行。
+// 微信音频（voice-inline）：回填的 <audio> 带 data-title，md 链接文字取标题——
+// 链接上写什么，文件就叫什么（见 export-audio.audioRelPath）。
 td.addRule('mowenAudio', {
   filter: (node) => node.nodeName === 'AUDIO',
   replacement: (_content, node) => {
-    const src = (node as unknown as Element).getAttribute('src') ?? ''
-    return src ? `\n\n[音频](${src})\n\n` : '\n\n'
+    const el = node as unknown as Element
+    const src = el.getAttribute('src') ?? ''
+    if (!src) return '\n\n'
+    const title = el.getAttribute('data-title') ?? ''
+    return title ? `\n\n[${title}](${src})\n\n` : `\n\n[音频](${src})\n\n`
   },
 })
 

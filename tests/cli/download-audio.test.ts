@@ -47,21 +47,24 @@ async function run(...args: string[]) {
   return { code, result: JSON.parse(stdout) }
 }
 
-describe('download 音频接线(票据 voice-03)', () => {
-  it('默认下载音频:audios/audio-1.mp3 落盘,meta 记 voiceId', async () => {
+describe('download 音频接线(票据 voice-03,内联原位+标题命名)', () => {
+  it('默认下载音频:文件名取标题,meta 记 voiceId', async () => {
     const { code, result } = await run('--url', 'https://mp.weixin.qq.com/s/aud1')
     expect(code).toBe(0)
     expect(result).toMatchObject({ ok: true, succeeded: 1 })
     const [meta] = await new Library(root).list()
     expect(meta.audios).toHaveLength(1)
-    expect(meta.audios?.[0]).toMatchObject({ voiceId: 'VOICE1', path: 'audios/audio-1.mp3' })
+    expect(meta.audios?.[0]).toMatchObject({ voiceId: 'VOICE1', title: 'U1 单词', path: 'audios/U1 单词.mp3' })
     expect(network.binary.mock.calls.some((c) => String(c[0]).includes('getvoice'))).toBe(true)
     // 文件真实落盘(不只记 meta)
     const { existsSync, readFileSync } = await import('node:fs')
     const { join: joinPath } = await import('node:path')
-    const p = joinPath(meta.dir, 'audios', 'audio-1.mp3')
+    const p = joinPath(meta.dir, 'audios', 'U1 单词.mp3')
     expect(existsSync(p)).toBe(true)
     expect(readFileSync(p).toString()).toBe('MP3')
+    // md 链接文字与标题一致(链接上写什么,文件就叫什么)
+    const md = readFileSync(joinPath(meta.dir, 'content.md'), 'utf-8')
+    expect(md).toContain('U1 单词')
   })
 
   it('--no-audio 跳过:不请求 getvoice,记录无路径,正文留说明', async () => {

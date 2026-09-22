@@ -76,14 +76,14 @@ describe('download URL 清单(票据 urllist-02)', () => {
     expect(code).toBe(1)
   })
 
-  it('含语音文章默认落音频;--no-audio 跳过且正文留说明', async () => {
+  it('含语音文章默认落音频(标题命名);--no-audio 跳过且正文留说明', async () => {
     network.html.mockImplementation(async (_kind: string, url: string) =>
       url.includes('audx2') ? page('语音文2', '2247540997') : page('语音文', '2247540996', true))
     const { result } = await run('--url', 'https://mp.weixin.qq.com/s/audx')
     expect(result.succeeded).toBe(1)
     const [meta] = await new Library(root).list()
     expect(meta.audios).toHaveLength(1)
-    expect(meta.audios?.[0].path).toBe('audios/audio-1.mp3')
+    expect(meta.audios?.[0].path).toBe('audios/U1.mp3')
     const { result: r2 } = await run('--url', 'https://mp.weixin.qq.com/s/audx2', '--no-audio')
     expect(r2.succeeded).toBe(1)
     const lib = await new Library(root).list()

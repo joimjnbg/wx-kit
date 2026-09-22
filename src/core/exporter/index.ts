@@ -90,12 +90,14 @@ export async function exportArticle(input: ExportInput, deps: ExportDeps): Promi
   for (const w of warnings) deps.onWarning?.(w)
 
   // 语音:与视频同规——写 md/html 之前,本次流程内下完(getvoice 302 filekey 短窗有效)。
+  // 不同:音频在正文原位回填(contentHtml 直接改写,md 经 turndown 自然带可点链接)。
   if (wantAudio && parsed.audios.length) deps.onProgress?.({ phase: 'audio', message: `下载语音 0/${parsed.audios.length}` })
-  const { records: audioRecords, htmlSuffix: audioHtml, mdSuffix: audioMd, warnings: audioWarnings } = await downloadAudios(
-    parsed.audios, dir, wantAudio, deps.fetchBinary, (event) => {
+  const { records: audioRecords, contentHtml: audioHtml, warnings: audioWarnings } = await downloadAudios(
+    parsed.audios, contentHtml, dir, wantAudio, deps.fetchBinary, (event) => {
       deps.onProgress?.({ phase: 'audio', message: `下载语音 ${event.index}/${event.total}` })
     },
   )
+  contentHtml = audioHtml
   if (audioRecords.length) meta.audios = audioRecords
   for (const w of audioWarnings) deps.onWarning?.(w)
 
@@ -105,12 +107,12 @@ export async function exportArticle(input: ExportInput, deps: ExportDeps): Promi
   const allWarnings = [...parsed.warnings, ...warnings, ...audioWarnings]
   if (allWarnings.length) meta.warnings = allWarnings
 
-  // html 与 md 的音视频引用形态不同（html 能内联 <video>/<audio>，md 只能给链接），
-  // 且 turndown 不认识 <video>/<audio> —— 所以分成两个 suffix，不能共用一份 contentHtml。
-  const htmlBody = [contentHtml, htmlSuffix, audioHtml].filter(Boolean).join('\n')
-  const mdTail = [mdSuffix, audioMd].filter(Boolean).join('\n\n')
+  // html 用内联 <video>(阅读器 iframe 可播),md 用可点链接;
+  // turndown 不认识 <video> —— 所以视频走 suffix,不进 contentHtml。
+  // 音频相反:已在 contentHtml 原位回填 <audio>,md 经 turndown 自然带链接,无需 suffix。
+  const htmlBody = htmlSuffix ? `${contentHtml}\n${htmlSuffix}` : contentHtml
 
-  if (formats.includes('md')) await writeMarkdown(dir, meta, contentHtml, mdTail)
+  if (formats.includes('md')) await writeMarkdown(dir, meta, contentHtml, mdSuffix)
   // pdf renders from index.html, so html is written when pdf is requested even
   // if 'html' wasn't selected; index.html then remains as an intermediate file.
   if (formats.includes('html') || formats.includes('pdf')) await writeHtml(dir, meta, htmlBody)
