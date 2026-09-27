@@ -1,6 +1,7 @@
 // src/core/resolve-urls.ts
 // URL 清单文本解析(纯函数,零网络):逐行判定有效/无效,重复按归一化合并。
-// 与 subscription-refs.sourceUrlKey 同规则(渲染层 sync-rows 复述过),此处收口到 core。
+// 归一规则转调共享缝 ../shared/url-identity(与 subscription-refs、sync-rows 同源)。
+import { articleUrlKey } from '../shared/url-identity'
 
 /** 单条 URL 的解析结果。 */
 export interface ResolvedUrl {
@@ -21,15 +22,9 @@ export interface ResolveUrlsResult {
   total: number
 }
 
-/** 短链 ~/ 形态归一(与 sourceUrlKey 同规则)。 */
+/** 短链 ~/ 形态归一(转调共享缝)。 */
 export function urlKey(raw: string): string {
-  try {
-    const u = new URL(raw)
-    if (u.hostname === 'mp.weixin.qq.com' && u.pathname.startsWith('/s/')) {
-      return `${u.origin}${u.pathname.replace(/~/g, '_')}`
-    }
-  } catch { /* 非 URL 保持原值 */ }
-  return raw
+  return articleUrlKey(raw)
 }
 
 function parseOne(raw: string): ResolvedUrl {

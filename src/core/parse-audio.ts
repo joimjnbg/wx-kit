@@ -3,6 +3,7 @@
 // canonical 键是元素的 voice_encode_fileid;voiceList 只补 listen_id/sn;
 // readtemplate audio_tmpl 的 src 是展示占位,不可下载,直接忽略。
 // 端点证据见 docs/superpowers/spikes/2026-09-18-wechat-voice-download.md。
+import { normVoiceId } from '../shared/url-identity'
 
 /** 单条语音的解析结果(url 为 session 内有效的 getvoice 直链,不持久化)。
  * index 为其在正文中的出现序号(从 0 起),供导出时原位回填。 */
@@ -46,10 +47,8 @@ function playable(tag: string): { ok: boolean; reason?: string } {
   return { ok: true }
 }
 
-/** voiceList 仅作 listen_id/sn 补充(元素无该属性时兜底)。键归一(base64 变体/&#61;),与播放器 isSameVoiceFileid 同语义。 */
-export function normVoiceId(raw: string): string {
-  return raw.replace(/&amp;/g, '&').replace(/&#61;/g, '=').trim()
-}
+/** voiceList 键归一:转调共享缝(url-identity),对外保留旧导出名。 */
+export { normVoiceId } from '../shared/url-identity'
 
 function listenMap(html: string): Map<string, string> {
   const out = new Map<string, string>()

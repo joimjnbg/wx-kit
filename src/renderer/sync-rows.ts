@@ -1,8 +1,10 @@
 // src/renderer/sync-rows.ts
 // 同步行组装纯函数(与 subscription-view 同层:只放 UI 无关的派生逻辑)。
-// 渲染层可直接 import —— 零 node 依赖,不得引入 core/fs/electron 运行时。
+// 渲染层可直接 import —— 零 node 依赖,不得引入 core/fs/electron 运行时;
+// 身份规则转调共享缝 ../shared/url-identity(与 core 同源,不再复述)。
 // 类型映射与 core/message-kind.kindTag 同构(渲染层禁引 core,故此处复述最小映射);
 // 若 message-kind 新增类型,此处需同步跟进(测试钉住视频/图片/未知三档)。
+import { articleUrlKey, refIdOf } from '../shared/url-identity'
 
 /** 行组装输入:订阅待处理条目的最小展示子集(含主键与时间,身份与排序稳定)。 */
 export interface SyncRowInput {
@@ -35,21 +37,14 @@ function kindOf(type: number | null | undefined): { label: string | null; warn: 
   return { label: '未知类型', warn: true }
 }
 
-/** 短链 ~/ 形态归一(与 core/subscription-refs.sourceUrlKey 同规则,渲染层复述)。 */
+/** 短链 ~/ 形态归一(转调共享缝)。 */
 function urlKey(raw: string): string {
-  try {
-    const u = new URL(raw)
-    if (u.hostname === 'mp.weixin.qq.com' && u.pathname.startsWith('/s/')) {
-      return `${u.origin}${u.pathname.replace(/~/g, '_')}`
-    }
-  } catch { /* 非 URL 保持原值 */ }
-  return raw
+  return articleUrlKey(raw)
 }
 
-/** 稳定身份:微信主键 mid_idx 优先,回退归一化 URL(与 core refId 同规则,渲染层复述)。 */
+/** 稳定身份:微信主键 mid_idx 优先,回退归一化 URL(转调共享缝)。 */
 export function syncRefId(r: Pick<SyncRowInput, 'url' | 'appmsgid' | 'itemidx'>): string {
-  if (r.appmsgid != null && r.itemidx != null) return `${r.appmsgid}_${r.itemidx}`
-  return urlKey(r.url)
+  return refIdOf(r)
 }
 
 /** 选择集计算(渲染层复述 core/applyPick 规则,禁引 core):
