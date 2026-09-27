@@ -8,6 +8,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import * as cheerio from 'cheerio'
 import type { MpAudioSource } from '../parse-audio'
+import { normVoiceId } from '../parse-audio'
 import { sanitizeName } from '../paths'
 import { FETCH_TIMEOUT_MS } from '../fetch-html'
 import { globalRequestStopCode } from '../mp-errors'
@@ -61,12 +62,11 @@ export async function downloadAudios(
 
   const $ = cheerio.load(contentHtml, null, false)
   const tags = $('mp-common-mpaudio').toArray()
-  // 按 voiceId 配对(不可播元素仍在正文中占位,按序配对会错位)
+  // 按 voiceId 配对(不可播元素仍在正文中占位,按序配对会错位);归一转调共享缝
   const byId = new Map(audios.map((a) => [a.voiceId, a]))
   const byRecord = new Map(records.map((r) => [r.voiceId, r]))
   const voiceIdOf = (el: { attribs?: Record<string, string | undefined> }): string | undefined => {
-    const raw = (el.attribs?.['voice_encode_fileid'] ?? '').trim()
-    const norm = raw.replace(/&amp;/g, '&').replace(/&#61;/g, '=').trim()
+    const norm = normVoiceId(el.attribs?.['voice_encode_fileid'] ?? '')
     return norm || undefined
   }
   const taken = new Set<string>()

@@ -47,7 +47,7 @@ function playable(tag: string): { ok: boolean; reason?: string } {
   return { ok: true }
 }
 
-/** voiceList 键归一转调共享缝(对外保留旧导出名,防外部引用断裂)。 */
+/** voiceList 键归一:转调共享缝(url-identity),对外保留旧导出名。 */
 export { normVoiceId } from '../shared/url-identity'
 
 function listenMap(html: string): Map<string, string> {

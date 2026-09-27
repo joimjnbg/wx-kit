@@ -3,6 +3,7 @@ import { Alert, Button, Checkbox, Input, List, Select, Spin, Tag, message } from
 import { api, type MpSessionInfo, type SubscribedAccount } from '../api'
 import { sessionHint } from '../sync-view'
 import { buildSyncRows, computePicked, mergeSyncRows, pickSummary, syncRefId, type SyncRow } from '../sync-rows'
+import { articleUrlKey } from '../../shared/url-identity'
 import { resolveUrlText } from '../../core/resolve-urls'
 
 // 同步页(票据 02a):Seed URL 确认账号或已选订阅账号 → 待处理行 + 已存档标记。
@@ -47,17 +48,8 @@ export default function Sync() {
     try {
       // URL 清单行无订阅归属:走通用 download(按 URL),订阅行走 subscriptionsDownloadNew(按 refId)
       const urlById = new Map(rows.map((r) => [r.refId, r.url] as const))
-      // 短链变体归一(~/→_):反查与回填不因形态漏行
-      const normUrl = (raw: string): string => {
-        try {
-          const u = new URL(raw)
-          if (u.hostname === 'mp.weixin.qq.com' && u.pathname.startsWith('/s/')) {
-            return `${u.origin}${u.pathname.replace(/~/g, '_')}`
-          }
-        } catch { /* 非 URL 保持原值 */ }
-        return raw
-      }
-      const normByUrl = new Map(rows.map((r) => [normUrl(r.url), r.refId] as const))
+      // 短链变体归一转调共享缝(与 core 同源)
+      const normByUrl = new Map(rows.map((r) => [articleUrlKey(r.url), r.refId] as const))
       const urlTargets = targets.map((id) => urlById.get(id)).filter((u): u is string => !!u)
       if (!target) {
         const settings = await api.getSettings().catch(() => null)
@@ -67,7 +59,7 @@ export default function Sync() {
         setResultById((prev) => {
           const next = { ...prev }
           for (const item of summary.items) {
-            const id = normByUrl.get(normUrl(item.url))
+            const id = normByUrl.get(articleUrlKey(item.url))
             if (!id) continue
             next[id] = item.ok ? { status: 'ok' } : { status: 'failed', message: item.error?.message ?? '未成功,可重试' }
           }
@@ -75,9 +67,9 @@ export default function Sync() {
         })
         // 标题回填:下载后按库标题刷新 URL 清单行(解析时只有 URL)
         const lib = await api.libraryList()
-        const byUrl = new Map(lib.map((m) => [normUrl(m.sourceUrl), m] as const))
+        const byUrl = new Map(lib.map((m) => [articleUrlKey(m.sourceUrl), m] as const))
         setRows((prev) => prev.map((r) => {
-          const hit = byUrl.get(normUrl(r.url))
+          const hit = byUrl.get(articleUrlKey(r.url))
           return hit ? { ...r, title: hit.title } : r
         }))
         return
